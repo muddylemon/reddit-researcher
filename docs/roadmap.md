@@ -32,6 +32,9 @@ Goal: make multi-run analysis tractable.
 - [ ] `reddit-researcher diff <run-a> <run-b>` to compare two runs of the same project.
 - [ ] Time-series mode: re-run a project on a schedule and aggregate results across timestamps.
 - [ ] Configurable corpus formatters (compact, conversational, structured-JSON-for-tools).
+- [ ] **Multi-subreddit subreddit-mode** — `[scrape].subreddits = ["a", "b", "c"]` scrapes
+      each into one combined run dir. Surfaced as a real friction point during the
+      Missouri-cannabis case study; right now users have to hand-write a Python harness.
 
 ## 0.3.0 — judging and routing
 

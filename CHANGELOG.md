@@ -4,6 +4,34 @@ All notable changes to Reddit Researcher are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+Polish pass: documentation alignment + filling pipeline test gaps revealed by
+the v0.1.1-beta release coverage report.
+
+### Added
+- New `tests/test_extract.py` (6 tests) — covers `extract_from_run`'s empty-posts
+  short-circuit, subreddit/search corpus selection, chunk reuse vs. force-reextract,
+  `chunk_limit` honoring, and missing-prompt validation.
+- New `tests/test_search_scrape.py` (7 tests) — covers `scrape_search_terms`'s
+  manifest stamping, search-error capture, comment-error capture, resume into an
+  existing run dir, relevance review application, term-slice arguments, and input
+  validation.
+- New `tests/test_run_project.py` (5 tests) — covers `run_project` dispatch for
+  both modes, `skip_extract`, `--run-dir` threading, and the no-prompt path.
+- New "Caveats and known limitations" section in [docs/architecture.md](docs/architecture.md):
+  documents Reddit's anonymous in-sub search behavior, the multi-subreddit gap, the
+  ~1000-post pagination cap, comment-tree limits, and relevance-filter tuning.
+- New "Local industry directory" pattern in [docs/ideas.md](docs/ideas.md) — the
+  multi-subreddit case study shape with the cannabis-businesses example.
+- CONTRIBUTING.md notes the optional `[praw]` extra for backend work.
+
+### Changed
+- CI coverage gate raised from 70% to 85% (currently passing at 92%). `pipeline.py`
+  jumped from 27% to 98% with the new tests.
+- Roadmap 0.2.0 milestone now includes "Multi-subreddit subreddit-mode" as a real
+  friction point surfaced by the cannabis-businesses case study.
+
 ## [0.1.1-beta] — 2026-05-06
 
 Closes the last open item in the `0.1.0` milestone.

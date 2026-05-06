@@ -22,6 +22,15 @@ pip install -e ".[dev]"
 pytest
 ```
 
+If you're working on or testing the PRAW backend, also install the optional extra:
+
+```bash
+pip install -e ".[dev,praw]"
+```
+
+The PRAW tests use stubbed `praw.Reddit` objects and run cleanly without the real
+`praw` package, so most contributors don't need the extra installed.
+
 ## Running the tool against your changes
 
 ```bash

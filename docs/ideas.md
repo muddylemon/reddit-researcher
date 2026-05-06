@@ -126,6 +126,29 @@ A thinner shape than the others, but Reddit is unusually good at it.
   each from context."
 - **Why it works:** subreddits are where slang gets workshopped before it leaves the building.
 
+## Local industry directory (subreddit mode, multiple subs)
+
+Surveys the niche subreddits around an industry or scene to produce a directory of named
+businesses, brands, or actors mentioned by the community. Pattern: subreddit-mode top
+listings of 2–4 sibling subs, deduplicated and synthesized into a single list.
+
+- **Why it works:** local industry subs are saturated with named-entity references — every
+  thread is "tried X", "switched to Y", "what happened to Z". The community's collective
+  memory is more current than any directory site.
+- **Worked example:** a Missouri cannabis directory pulled from r/missourimedical,
+  r/StLouisTrees, r/GrowMO. Surfaced ~35 unique businesses (dispensaries, cultivators,
+  consumption lounges, brands) with citations, including one operator's quiet
+  consolidation of multiple "independent" brands — a non-obvious finding the corpus
+  genuinely supported.
+- **Workflow gotcha:** as of 0.1.x, a single project targets one subreddit. To survey
+  several sibling subs, write a small harness that calls `pipeline.scrape_subreddit()`
+  with the same `run_dir` for each. Multi-subreddit subreddit-mode is on the
+  [0.2.0 roadmap](roadmap.md).
+- **Other industries this works for:** local food scenes (chefs, restaurants, bakeries),
+  city construction/contractor referrals, hobby-scene gear sellers, regional service
+  providers (mechanics, plumbers, etc.) where a tight community keeps recommending or
+  warning off named operators.
+
 ## Civic / public-discourse research
 
 Sensitive shape. Use carefully and cite generously — the goal is to summarize what's

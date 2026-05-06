@@ -115,3 +115,28 @@ line in `project.toml`.
 - Practical for prompt tuning: rerunning extraction over the same scrape is free.
 - The `OllamaClient` API is intentionally narrow (`generate`, `list_models`). Swapping it for a
   different local backend is a one-file change.
+
+## Caveats and known limitations
+
+These are real friction points that have shown up in practice. They aren't bugs — most are
+properties of Reddit's public surface — but they shape how you design a project.
+
+- **Reddit's anonymous in-subreddit search returns empty for many small subs.** The
+  `/r/<sub>/search.json?restrict_sr=1` endpoint is heavily restricted without OAuth. A search
+  that obviously *should* match (e.g. `dispensary` in a sub that constantly discusses dispensaries)
+  often returns zero results. The `top.json` and `hot.json` listing endpoints work fine. Workarounds:
+  use subreddit mode against each sub directly, or switch to the PRAW backend.
+- **A single project targets one subreddit (subreddit mode) or one search across an allowlist
+  (search mode).** There is currently no "scrape these N subreddits' top listings into one
+  combined run" mode. Workaround: use `pipeline.scrape_subreddit()` from a small Python harness
+  with the same `run_dir` for each call. Multi-subreddit subreddit mode is on the
+  [0.2.0 roadmap](roadmap.md).
+- **The default JSON backend caps at ~1000 posts per listing.** Reddit's pagination soft-limits
+  there. For deeper pulls, switch to PRAW.
+- **Comment trees are top-N, not exhaustive.** `fetch_comments` pulls the top `comment_limit`
+  comments in one request; very large threads' deep replies are clipped. PRAW expands this fully
+  via `MoreComments` resolution.
+- **The relevance filter is intentionally simple** (substring + keyword). It runs *before* the
+  LLM as a cost-control pass, not as a final classifier. The LLM is allowed to disagree, and the
+  relevance rules are easy to misconfigure (too narrow → empty `relevant_posts.jsonl`; too
+  broad → no signal).

@@ -43,7 +43,7 @@ jobs:
         run: python -m pytest -q
       - name: Coverage gate (Linux 3.12 only)
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
-        run: python -m pytest --cov --cov-report=term --cov-fail-under=70
+        run: python -m pytest --cov --cov-report=term --cov-fail-under=85
 
   lint:
     name: lint (ruff)
