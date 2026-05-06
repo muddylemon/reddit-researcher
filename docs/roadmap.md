@@ -18,7 +18,7 @@ The current line. Goal: keep the core stable while smoothing rough edges.
 Goal: a version that's safe to pin and recommend without caveats.
 
 - [x] Versioned manifest schema (`schema_version` field) with a forward-compatibility note. *(0.1.0)*
-- [ ] Optional PRAW backend behind `[scrape].backend = "praw"` for authenticated, higher-quota use.
+- [x] Optional PRAW backend behind `[scrape].backend = "praw"` for authenticated, higher-quota use. *(0.1.1)*
 - [x] First-class subreddit-mode resume (parity with search mode). *(0.1.0)*
 - [x] Built-in prompt templates: question-mining, sentiment, expert-mention, FAQ extraction. *(0.1.0)*
 - [x] Project-level `.env` support for things like `OLLAMA_URL` and PRAW credentials. *(0.1.0)*

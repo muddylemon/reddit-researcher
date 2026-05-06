@@ -5,6 +5,7 @@ from typing import Any
 
 import requests
 
+from .config import ScrapeConfig
 from .models import CommentRecord, PostRecord
 
 
@@ -274,3 +275,27 @@ class RedditClient:
                     stack.append((reply, depth + 1))
 
         return comments
+
+
+def make_reddit_client(scrape: ScrapeConfig) -> Any:
+    """Return a backend-appropriate client for the given scrape config.
+
+    Both backends expose `fetch_posts`, `fetch_search_posts`, and `fetch_comments`
+    with identical signatures, so callers can use the result interchangeably.
+
+    The PRAW backend is imported lazily so the optional `praw` dependency only
+    matters when it's actually selected.
+    """
+    if scrape.backend == "praw":
+        from .praw_client import PrawRedditClient
+
+        return PrawRedditClient(
+            user_agent=scrape.user_agent,
+            pause_seconds=scrape.pause_seconds,
+            max_retries=scrape.max_retries,
+        )
+    return RedditClient(
+        user_agent=scrape.user_agent,
+        pause_seconds=scrape.pause_seconds,
+        max_retries=scrape.max_retries,
+    )

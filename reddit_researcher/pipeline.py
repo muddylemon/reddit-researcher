@@ -19,7 +19,7 @@ from .prompting import (
     quote_search_term,
     scope_label_for,
 )
-from .reddit_client import RedditClient
+from .reddit_client import make_reddit_client
 from .relevance import RelevanceConfig, review_post_relevance
 from .storage import (
     append_jsonl,
@@ -56,11 +56,7 @@ def scrape_subreddit(
         (run_dir / "review").mkdir(parents=True, exist_ok=True)
 
     logger = RunLogger(run_dir)
-    client = RedditClient(
-        user_agent=scrape.user_agent,
-        pause_seconds=scrape.pause_seconds,
-        max_retries=scrape.max_retries,
-    )
+    client = make_reddit_client(scrape)
 
     posts_path = run_dir / "normalized" / "posts.jsonl"
     comments_path = run_dir / "normalized" / "comments.jsonl"
@@ -181,11 +177,7 @@ def scrape_search_terms(
         (run_dir / "logs").mkdir(parents=True, exist_ok=True)
         (run_dir / "review").mkdir(parents=True, exist_ok=True)
     logger = RunLogger(run_dir)
-    client = RedditClient(
-        user_agent=scrape.user_agent,
-        pause_seconds=scrape.pause_seconds,
-        max_retries=scrape.max_retries,
-    )
+    client = make_reddit_client(scrape)
 
     all_posts: list[dict] = []
     all_comments: list[dict] = []

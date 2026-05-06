@@ -67,8 +67,8 @@ def _make_comment(comment_id: str, post_id: str) -> CommentRecord:
 def _patch_client(monkeypatch, posts, comments_by_post) -> None:
     monkeypatch.setattr(
         pipeline,
-        "RedditClient",
-        lambda **_: _StubRedditClient(posts, comments_by_post),
+        "make_reddit_client",
+        lambda _scrape: _StubRedditClient(posts, comments_by_post),
     )
 
 

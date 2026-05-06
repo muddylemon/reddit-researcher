@@ -18,7 +18,8 @@ Reddit Researcher is a small pipeline. It does five things in order and writes e
 |--------|----------------|
 | `cli.py`           | Argparse front door. Translates flags into config dataclasses and dispatches to the pipeline. |
 | `config.py`        | Loads and validates `project.toml`. Resolves relative paths against the project folder. |
-| `reddit_client.py` | Reads Reddit's public JSON endpoints with retry + 429 handling. No auth. |
+| `reddit_client.py` | JSON-endpoint backend (no auth) plus the `make_reddit_client(scrape)` factory. |
+| `praw_client.py`   | Optional [PRAW](https://praw.readthedocs.io/) backend. Selected by `[scrape].backend = "praw"`; needs the `praw` extra. |
 | `ollama_client.py` | Thin wrapper over Ollama's HTTP API. Surfaces missing models with the available list. |
 | `pipeline.py`      | Orchestrates scrape → normalize → relevance → extract. Handles checkpointing. |
 | `prompting.py`     | Loads prompt files, builds corpora, chunks long text, and assembles model prompts. |
@@ -84,12 +85,28 @@ CLI flags, with the higher item always winning. The dotenv parser is in
 - Easy to read, easy to diff. Comments are first-class.
 - Strict typing avoids the YAML "Norway problem" and ambiguous numbers.
 
-## Why Reddit's public JSON endpoint, not PRAW
+## JSON vs PRAW backends
 
-- Zero-config: no `client_id`, `client_secret`, refresh tokens, or registered apps. A fork-it-and-go
-  contract.
-- The endpoint is sufficient for low-volume research. For higher volume or authenticated reads,
-  see the roadmap — a PRAW backend is planned.
+The default `"json"` backend reads Reddit's public JSON endpoints. Zero-config: no
+`client_id`, `client_secret`, refresh tokens, or registered apps. Sufficient for low-volume
+research and the path most forks will take.
+
+The optional `"praw"` backend ships in 0.1.1 for users who need authenticated access:
+
+- Higher rate-limit ceiling than the unauth endpoint.
+- Listings can return more than 1000 posts.
+- Comment trees automatically expand `MoreComments` placeholders.
+
+Trade-offs:
+
+- Adds the `praw` Python dependency (install via `pip install reddit-researcher[praw]`).
+- Requires registering a "script" app on Reddit and stashing the resulting
+  `REDDIT_CLIENT_ID` / `REDDIT_CLIENT_SECRET` in your shell or a `.env` file.
+- `pause_seconds` and `max_retries` are ignored; PRAW manages its own backoff.
+
+Both backends emit identical `PostRecord` / `CommentRecord` shapes and produce the same
+run-folder layout, so a project can be flipped from JSON to PRAW (or back) by changing one
+line in `project.toml`.
 
 ## Why Ollama, not a hosted LLM
 

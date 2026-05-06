@@ -4,6 +4,32 @@ All notable changes to Reddit Researcher are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1-beta] — 2026-05-06
+
+Closes the last open item in the `0.1.0` milestone.
+
+### Added
+- **Optional PRAW backend.** New `[scrape].backend = "praw"` config field selects an
+  authenticated [PRAW](https://praw.readthedocs.io/)-backed client. Higher rate-limit
+  ceiling than the unauth JSON endpoint, full comment-tree expansion, and listings beyond
+  1000 posts.
+  - Install with `pip install reddit-researcher[praw]`.
+  - Set `REDDIT_CLIENT_ID` and `REDDIT_CLIENT_SECRET` in your environment or a project
+    `.env` file. Register a "script" app at https://www.reddit.com/prefs/apps to get them.
+  - Helpful errors when `praw` is not installed (`PrawNotInstalled`) or credentials are
+    missing (`PrawCredentialsMissing`). Both surface install + setup instructions.
+- New `make_reddit_client(scrape)` factory in `reddit_client.py` dispatches between the
+  two backends. `praw_client.PrawRedditClient` mirrors `RedditClient`'s interface, so
+  the pipeline doesn't care which backend it gets.
+
+### Changed
+- `pipeline.py` constructs its Reddit client through the factory instead of instantiating
+  `RedditClient` directly. No behavior change for projects on the default `"json"` backend.
+
+### Internal
+- 78 tests passing (was 67), 76% line coverage. PRAW tests use stubbed `praw.Reddit`
+  objects so the suite still runs without the optional dep installed.
+
 ## [0.1.0-beta] — 2026-05-06
 
 First-stable-line foundations. Knocks out everything in the `0.1.0` roadmap

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "reddit-researcher"
-version = "0.1.0b0"
+version = "0.1.1b0"
 description = "Run local Reddit research jobs and pipe results through a local Ollama model."
 readme = "README.md"
 license = { text = "MIT" }
@@ -36,6 +36,14 @@ dev = [
     "pytest>=8.0.0,<9.0.0",
     "pytest-cov>=5.0.0,<7.0.0",
     "ruff>=0.6.0,<1.0.0",
+]
+# Authenticated Reddit access via PRAW. Lifts rate-limit ceiling and lets the
+# scraper see more than 1000 posts per listing. Opt-in:
+#     pip install -e ".[praw]"
+# Then set REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET (a `.env` works) and
+# `[scrape].backend = "praw"` in your project.toml.
+praw = [
+    "praw>=7.7.0,<8.0.0",
 ]
 
 [project.scripts]

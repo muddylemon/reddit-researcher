@@ -2,7 +2,7 @@
 
 > Local Reddit research jobs, piped through a local Ollama model. Built to fork.
 
-**Status:** beta `0.1.0`
+**Status:** beta `0.1.1`
 
 Reddit Researcher is a small, opinionated Python CLI for running structured research on Reddit.
 You define a **project** (a folder with a TOML config and a prompt), point the tool at it, and
@@ -166,6 +166,35 @@ reddit-researcher init expert-mentions --mode search --template expert-mention
 reddit-researcher init --list-templates
 ```
 
+### Authenticated scraping (PRAW backend)
+
+By default, Reddit Researcher reads Reddit's public JSON endpoints — no auth, no setup.
+For higher rate limits, deeper comment trees, or listings beyond 1000 posts, you can
+opt into the [PRAW](https://praw.readthedocs.io/) backend:
+
+```bash
+pip install -e ".[praw]"   # or: pip install reddit-researcher[praw]
+```
+
+Register a "script" app at [reddit.com/prefs/apps](https://www.reddit.com/prefs/apps),
+then put the credentials in a `.env` (or your shell environment):
+
+```bash
+# .env
+REDDIT_CLIENT_ID=your_client_id
+REDDIT_CLIENT_SECRET=your_client_secret
+```
+
+Switch a project over by adding one line to its `project.toml`:
+
+```toml
+[scrape]
+backend = "praw"   # default is "json"
+```
+
+Both backends expose the same scrape interface — the run folder layout and manifest
+shape are identical.
+
 ### Environment variables and `.env`
 
 Reddit Researcher reads these env vars (and a per-project `.env` file, if present):
@@ -175,6 +204,7 @@ Reddit Researcher reads these env vars (and a per-project `.env` file, if presen
 | `OLLAMA_URL` | Override the Ollama endpoint. Defaults to `http://127.0.0.1:11434`. |
 | `OLLAMA_MODEL` | Default model when a project doesn't pin one. |
 | `REDDIT_RESEARCHER_USER_AGENT` | Override the User-Agent sent to Reddit. |
+| `REDDIT_CLIENT_ID` / `REDDIT_CLIENT_SECRET` | PRAW credentials. Required when `[scrape].backend = "praw"`. |
 
 Precedence (lowest to highest): code defaults → repo-root `.env` → project `.env` → shell environment → `project.toml` → CLI flags. Shell env vars are never overwritten by `.env` files.
 

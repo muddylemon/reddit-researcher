@@ -10,12 +10,19 @@ from .relevance import RelevanceConfig
 VALID_MODES = {"subreddit", "search"}
 VALID_SORTS = {"hot", "new", "top", "rising"}
 VALID_TIME_FILTERS = {"hour", "day", "week", "month", "year", "all"}
+VALID_BACKENDS = {"json", "praw"}
 
 # Environment variable names that override built-in defaults. CLI flags and
 # project.toml values still win over these. Documented in docs/architecture.md.
 ENV_OLLAMA_URL = "OLLAMA_URL"
 ENV_OLLAMA_MODEL = "OLLAMA_MODEL"
 ENV_USER_AGENT = "REDDIT_RESEARCHER_USER_AGENT"
+
+# PRAW credentials for the authenticated backend. Read-only mode does not need
+# a username or password — registering a "script" app at https://www.reddit.com/prefs/apps
+# yields the client_id and client_secret.
+ENV_PRAW_CLIENT_ID = "REDDIT_CLIENT_ID"
+ENV_PRAW_CLIENT_SECRET = "REDDIT_CLIENT_SECRET"
 
 
 def _default_ollama_url() -> str:
@@ -36,6 +43,7 @@ def _default_user_agent() -> str:
 @dataclass
 class ScrapeConfig:
     mode: str = "subreddit"
+    backend: str = "json"
     subreddit: str | None = None
     terms_file: Path | None = None
     subreddits_file: Path | None = None
@@ -131,9 +139,16 @@ def load_project(config_path: Path) -> ProjectConfig:
             f"invalid scrape.time_filter: {time_filter!r}. Must be one of {sorted(VALID_TIME_FILTERS)}.",
             path=config_path,
         )
+    backend = scrape_raw.get("backend", "json")
+    if backend not in VALID_BACKENDS:
+        raise ProjectConfigError(
+            f"invalid scrape.backend: {backend!r}. Must be one of {sorted(VALID_BACKENDS)}.",
+            path=config_path,
+        )
 
     scrape = ScrapeConfig(
         mode=mode,
+        backend=backend,
         subreddit=scrape_raw.get("subreddit"),
         terms_file=_resolve_path(scrape_raw.get("terms_file"), base_dir),
         subreddits_file=_resolve_path(scrape_raw.get("subreddits_file"), base_dir),
