@@ -1,0 +1,43 @@
+# Example: compare Reddit reception of multiple video games.
+# Run with: reddit-researcher run projects/example-game-reception
+#
+# Best showcase of comparative search-mode analysis. Swap the names in
+# terms.txt for any games you want to compare; the prompt is generic.
+
+name = "game-reception"
+description = "Compare how Reddit talks about a slate of video games."
+
+[scrape]
+mode = "search"
+terms_file = "terms.txt"
+subreddits_file = "subreddits.txt"
+exact_phrase = true
+sort = "top"
+time_filter = "year"
+post_limit = 15
+comment_limit = 5
+pause_seconds = 1.5
+max_retries = 5
+
+[analyze]
+model = "qwen3:8b"
+prompt_file = "prompt.md"
+chunk_char_limit = 12000
+ollama_timeout_seconds = 600
+
+[relevance]
+# These keywords must appear somewhere in title/body/comments for a post to clear
+# the deterministic relevance pass. Tuned for game-discussion signal vs. ads,
+# patch-note dumps, or out-of-context name drops.
+keywords = [
+    "review",
+    "gameplay",
+    "story",
+    "performance",
+    "bug",
+    "patch",
+    "DLC",
+    "worth",
+    "recommend",
+    "disappointed",
+]

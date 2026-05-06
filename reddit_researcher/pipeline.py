@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from .config import AnalyzeConfig, ProjectConfig, ScrapeConfig
 from .ollama_client import OllamaClient
+from .progress import RunLogger
 from .prompting import (
     build_chunk_prompt,
     build_corpus,
@@ -17,7 +18,6 @@ from .prompting import (
     quote_search_term,
     scope_label_for,
 )
-from .progress import RunLogger
 from .reddit_client import RedditClient
 from .relevance import RelevanceConfig, review_post_relevance
 from .storage import (
@@ -84,7 +84,7 @@ def scrape_subreddit(
         write_jsonl(run_dir / "review" / "relevance_review.jsonl", relevance_rows)
         relevant_posts = [
             post.to_dict()
-            for post, review in zip(posts, relevance_rows)
+            for post, review in zip(posts, relevance_rows, strict=True)
             if review["decision"] in {"include", "review"}
         ]
         write_jsonl(run_dir / "normalized" / "relevant_posts.jsonl", relevant_posts)
@@ -96,7 +96,7 @@ def scrape_subreddit(
         "time_filter": scrape.time_filter,
         "post_limit": scrape.post_limit,
         "comment_limit": scrape.comment_limit,
-        "scraped_at_utc": datetime.now(timezone.utc).isoformat(),
+        "scraped_at_utc": datetime.now(UTC).isoformat(),
         "post_count": len(posts),
         "comment_count": len(all_comments),
     }
@@ -173,7 +173,7 @@ def scrape_search_terms(
         "comment_limit": scrape.comment_limit,
         "pause_seconds": scrape.pause_seconds,
         "max_retries": scrape.max_retries,
-        "scraped_at_utc": datetime.now(timezone.utc).isoformat(),
+        "scraped_at_utc": datetime.now(UTC).isoformat(),
         "post_count": 0,
         "comment_count": 0,
         "search_fetch_error_count": 0,
@@ -184,7 +184,7 @@ def scrape_search_terms(
 
     def checkpoint(status: str) -> None:
         manifest["status"] = status
-        manifest["updated_at_utc"] = datetime.now(timezone.utc).isoformat()
+        manifest["updated_at_utc"] = datetime.now(UTC).isoformat()
         manifest["post_count"] = len(all_posts)
         manifest["comment_count"] = len(all_comments)
         manifest["search_fetch_error_count"] = len(search_fetch_errors)
@@ -295,13 +295,17 @@ def scrape_search_terms(
             post_payload["comments"] = [comment.to_dict() for comment in comments]
             all_posts.append(post_payload)
             all_comments.extend(comment.to_dict() for comment in comments)
-            review = review_post_relevance(post_payload, relevance) if relevance else {
-                "post_id": post_id,
-                "search_term": search_term,
-                "subreddit": post.get("subreddit"),
-                "decision": "include",
-                "reason": "no relevance filter configured",
-            }
+            review = (
+                review_post_relevance(post_payload, relevance)
+                if relevance
+                else {
+                    "post_id": post_id,
+                    "search_term": search_term,
+                    "subreddit": post.get("subreddit"),
+                    "decision": "include",
+                    "reason": "no relevance filter configured",
+                }
+            )
             write_json(
                 run_dir / "raw" / "comments" / f"{slugify(f'{search_term}:{post_id}')}.json",
                 raw_comments,
@@ -336,7 +340,11 @@ def extract_from_run(
         raise ValueError("analyze.prompt_file must be set to run extraction.")
 
     relevant_posts_path = run_dir / "normalized" / "relevant_posts.jsonl"
-    posts_path = relevant_posts_path if relevant_posts_path.exists() and relevant_posts_path.stat().st_size > 0 else run_dir / "normalized" / "posts.jsonl"
+    posts_path = (
+        relevant_posts_path
+        if relevant_posts_path.exists() and relevant_posts_path.stat().st_size > 0
+        else run_dir / "normalized" / "posts.jsonl"
+    )
     posts = read_jsonl(posts_path) if posts_path.exists() else []
     comments_path = run_dir / "normalized" / "comments.jsonl"
     comments = read_jsonl(comments_path) if comments_path.exists() else []
@@ -370,7 +378,7 @@ def extract_from_run(
             "total_chunk_count": 0,
             "chunk_limit": analyze.chunk_limit,
             "force_reextract": analyze.force_reextract,
-            "analyzed_at_utc": datetime.now(timezone.utc).isoformat(),
+            "analyzed_at_utc": datetime.now(UTC).isoformat(),
             "final_output": str(final_path),
         }
         write_json(manifest_path, manifest)
@@ -424,7 +432,7 @@ def extract_from_run(
         "total_chunk_count": len(all_chunks),
         "chunk_limit": analyze.chunk_limit,
         "force_reextract": analyze.force_reextract,
-        "analyzed_at_utc": datetime.now(timezone.utc).isoformat(),
+        "analyzed_at_utc": datetime.now(UTC).isoformat(),
         "final_output": str(final_path),
     }
     write_json(manifest_path, manifest)

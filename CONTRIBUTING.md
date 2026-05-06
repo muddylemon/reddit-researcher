@@ -26,7 +26,7 @@ pytest
 
 ```bash
 reddit-researcher --version
-reddit-researcher run projects/example-supplements --skip-extract
+reddit-researcher run projects/example-subreddit-faq --skip-extract
 ```
 
 Use `--skip-extract` while iterating on scraping logic so you don't burn LLM time.

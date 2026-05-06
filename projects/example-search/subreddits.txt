@@ -1,7 +1,0 @@
-# Optional allowlist. When present, search is restricted to these subreddits.
-# Leave empty (or remove this file) to search all of Reddit.
-fitness
-nutrition
-ScientificNutrition
-longevity
-Biohackers

@@ -1,0 +1,7 @@
+# Subreddit allowlist. Comment lines (starting with '#') are ignored.
+# These are general gaming subs that discuss most major releases. For a more
+# targeted run, add per-game subs (e.g. `cyberpunkgame`, `BaldursGate3`).
+gaming
+Games
+patientgamers
+truegaming

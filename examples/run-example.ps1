@@ -1,5 +1,5 @@
 param(
-    [string]$Project = "projects\example-supplements",
+    [string]$Project = "projects\example-subreddit-faq",
     [switch]$SkipExtract
 )
 

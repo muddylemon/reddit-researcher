@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 
@@ -11,7 +11,7 @@ class RunLogger:
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
 
     def info(self, message: str) -> None:
-        line = f"{datetime.now(timezone.utc).isoformat()} {message}"
+        line = f"{datetime.now(UTC).isoformat()} {message}"
         with self.log_path.open("a", encoding="utf-8", newline="\n") as handle:
             handle.write(line)
             handle.write("\n")

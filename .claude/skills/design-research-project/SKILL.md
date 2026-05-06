@@ -17,8 +17,15 @@ A folder under `projects/` containing:
 - `terms.txt` — required for `mode = "search"`. One search term per line.
 - `subreddits.txt` — optional allowlist for search mode.
 
-Refer to `projects/example-supplements/` (subreddit mode) and `projects/example-search/`
-(search mode) for canonical layouts.
+Refer to the shipped examples for canonical layouts:
+
+- `projects/example-subreddit-faq/` — subreddit mode (community FAQ mining).
+- `projects/example-game-reception/` — search mode, comparative sentiment.
+- `projects/example-tool-sentiment/` — search mode, dev-tool comparisons.
+- `projects/example-product-research/` — search mode, review-heavy subs.
+
+If the user's question doesn't fit any of those shapes, check `docs/ideas.md` for more
+templates before designing from scratch.
 
 ## Workflow
 

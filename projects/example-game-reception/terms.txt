@@ -1,0 +1,6 @@
+# Games to compare. Replace with your own — the prompt is generic.
+# Pick titles with non-trivial Reddit discussion (recent enough to have threads,
+# old enough to have post-launch reception, not just hype).
+Baldur's Gate 3
+Cyberpunk 2077
+Starfield

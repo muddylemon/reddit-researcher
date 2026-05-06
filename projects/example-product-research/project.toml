@@ -1,0 +1,44 @@
+# Example: research consumer products by mining review-heavy subreddits.
+# Run with: reddit-researcher run projects/example-product-research
+#
+# Reddit communities like r/BuyItForLife and r/headphones contain years of
+# unfiltered first-person ownership reports. This template surfaces durability
+# patterns, common complaints, and "what to buy instead" recommendations.
+
+name = "product-research"
+description = "Mine durability complaints, failure modes, and alternatives from review-heavy subreddits."
+
+[scrape]
+mode = "search"
+terms_file = "terms.txt"
+subreddits_file = "subreddits.txt"
+exact_phrase = true
+sort = "top"
+time_filter = "all"
+post_limit = 12
+comment_limit = 5
+pause_seconds = 1.5
+max_retries = 5
+
+[analyze]
+model = "qwen3:8b"
+prompt_file = "prompt.md"
+chunk_char_limit = 12000
+ollama_timeout_seconds = 600
+
+[relevance]
+# Keywords that filter for actual ownership/usage content vs. spec dumps and ads.
+keywords = [
+    "owned",
+    "broke",
+    "failed",
+    "lasted",
+    "durability",
+    "warranty",
+    "replaced",
+    "comfort",
+    "quality",
+    "recommend",
+    "regret",
+    "alternative",
+]

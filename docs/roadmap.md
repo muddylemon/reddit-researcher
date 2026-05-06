@@ -7,11 +7,11 @@ promise. If something here matters to you, open an issue.
 
 The current line. Goal: keep the core stable while smoothing rough edges.
 
-- [ ] `reddit-researcher init <name>` to scaffold a new project folder from a template.
-- [ ] `reddit-researcher list` to show available projects and recent runs.
-- [ ] `reddit-researcher review <run-dir>` for a quick CLI summary of a run's manifest + counts.
-- [ ] Better error messages when `project.toml` is malformed (line-number-aware).
-- [ ] CI: lint + test workflow runnable on a fork without secrets.
+- [x] `reddit-researcher init <name>` to scaffold a new project folder from a template. *(0.0.2)*
+- [x] `reddit-researcher list` to show available projects and recent runs. *(0.0.2)*
+- [x] `reddit-researcher review <run-dir>` for a quick CLI summary of a run's manifest + counts. *(0.0.2)*
+- [x] Better error messages when `project.toml` is malformed (line-number-aware). *(0.0.2)*
+- [x] CI: lint + test workflow runnable on a fork without secrets. *(0.0.2)*
 
 ## 0.1.0 — first stable line
 

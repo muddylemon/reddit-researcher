@@ -2,7 +2,7 @@
 
 > Local Reddit research jobs, piped through a local Ollama model. Built to fork.
 
-**Status:** beta `0.0.1`
+**Status:** beta `0.0.2`
 
 Reddit Researcher is a small, opinionated Python CLI for running structured research on Reddit.
 You define a **project** (a folder with a TOML config and a prompt), point the tool at it, and
@@ -57,20 +57,28 @@ ollama pull qwen3:8b
 ollama serve   # leave running in another terminal
 ```
 
-Run the example subreddit project:
+Run the example subreddit-FAQ project:
 
 ```bash
-reddit-researcher run projects/example-supplements
+reddit-researcher run projects/example-subreddit-faq
 ```
 
 That command will:
 
-1. Fetch the top posts from `r/Supplements` for the last month.
-2. Pull a small number of comments per post.
+1. Fetch the top posts from `r/personalfinance` for the last month.
+2. Pull the top comments per post.
 3. Build a corpus, chunk it, and feed it to `qwen3:8b` with the project's prompt.
-4. Write everything into a fresh `runs/Supplements/<timestamp>/` folder.
+4. Write everything into a fresh `runs/personalfinance/<timestamp>/` folder.
 
-Open `runs/.../analysis/final.md` to read the synthesized result.
+Open `runs/.../analysis/final.md` to read the synthesized FAQ.
+
+Want to compare reception of a few video games instead? Try:
+
+```bash
+reddit-researcher run projects/example-game-reception
+```
+
+See [`docs/ideas.md`](docs/ideas.md) for a full catalog of project shapes you can adapt.
 
 ## What is a "project"?
 
@@ -78,16 +86,16 @@ A project is a folder. The folder layout is up to you, but Reddit Researcher onl
 single file: `project.toml`.
 
 ```toml
-# projects/example-supplements/project.toml
-name = "supplements-questions"
-description = "Recurring questions in r/Supplements over the last month."
+# projects/example-subreddit-faq/project.toml
+name = "subreddit-faq"
+description = "Recurring questions and misconceptions in a single subreddit."
 
 [scrape]
 mode = "subreddit"
-subreddit = "Supplements"
+subreddit = "personalfinance"
 sort = "top"
 time_filter = "month"
-post_limit = 25
+post_limit = 30
 comment_limit = 10
 
 [analyze]
@@ -100,9 +108,9 @@ ollama_timeout_seconds = 600
 A search-mode project looks like this:
 
 ```toml
-# projects/example-search/project.toml
-name = "experts-mentioned-on-reddit"
-description = "Find Reddit discussion of named experts."
+# projects/example-game-reception/project.toml
+name = "game-reception"
+description = "Compare how Reddit talks about a slate of video games."
 
 [scrape]
 mode = "search"
@@ -110,9 +118,9 @@ terms_file = "terms.txt"
 subreddits_file = "subreddits.txt"
 exact_phrase = true
 sort = "top"
-time_filter = "all"
-post_limit = 10
-comment_limit = 3
+time_filter = "year"
+post_limit = 15
+comment_limit = 5
 
 [analyze]
 model = "qwen3:8b"
@@ -120,19 +128,40 @@ prompt_file = "prompt.md"
 ollama_timeout_seconds = 600
 
 [relevance]
-keywords = ["interview", "podcast", "research"]
+keywords = ["review", "gameplay", "story", "performance", "bug", "patch", "worth"]
 ```
 
-See [`projects/example-supplements/`](projects/example-supplements/) and
-[`projects/example-search/`](projects/example-search/) for full examples.
+The repo ships four worked examples covering the most common shapes:
+
+- [`projects/example-subreddit-faq/`](projects/example-subreddit-faq/) — what does this
+  community keep asking? *(subreddit mode)*
+- [`projects/example-game-reception/`](projects/example-game-reception/) — compare reception
+  of multiple video games. *(search mode, comparative)*
+- [`projects/example-tool-sentiment/`](projects/example-tool-sentiment/) — how do developers
+  actually feel about a stack of frameworks? *(search mode, dev subs)*
+- [`projects/example-product-research/`](projects/example-product-research/) — mine durability
+  and "what to buy instead" patterns from review-heavy subs. *(search mode, focused)*
+
+For more project shapes (public-figure sentiment, hobby starter packs, civic threads, trend
+tracking, and more), see [`docs/ideas.md`](docs/ideas.md).
 
 ## CLI reference
 
 ```text
+reddit-researcher init <name>             Scaffold a new projects/<name>/ folder.
+reddit-researcher list                    Show projects and recent runs as a table.
 reddit-researcher run <project>           Load project.toml and run scrape + extract.
 reddit-researcher scrape <subreddit>      One-off subreddit scrape (no project needed).
 reddit-researcher search --terms-file=... One-off Reddit search across one or more terms.
 reddit-researcher extract <run-dir>       Re-run analysis over an already-scraped run folder.
+reddit-researcher review <run-dir>        Print a one-screen summary of a run's manifest.
+```
+
+Scaffold a new project in seconds:
+
+```bash
+reddit-researcher init my-research --mode subreddit --subreddit Programming
+reddit-researcher init game-buzz --mode search --term "Hollow Knight Silksong" --term "GTA VI"
 ```
 
 Common flags (see `reddit-researcher <cmd> --help` for the full list):

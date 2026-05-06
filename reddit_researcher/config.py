@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import sys
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from .relevance import RelevanceConfig
-
 
 VALID_MODES = {"subreddit", "search"}
 VALID_SORTS = {"hot", "new", "top", "rising"}
@@ -60,13 +58,33 @@ def _resolve_path(value: str | None, base_dir: Path) -> Path | None:
     return candidate
 
 
+class ProjectConfigError(ValueError):
+    """Raised when a project.toml is malformed or fails validation.
+
+    `path` is the offending file, `lineno` is the 1-based line number when the
+    underlying error reports one (e.g. tomllib parse errors), otherwise `None`.
+    """
+
+    def __init__(self, message: str, *, path: Path, lineno: int | None = None) -> None:
+        location = f"{path}:{lineno}" if lineno else str(path)
+        super().__init__(f"{location}: {message}")
+        self.path = path
+        self.lineno = lineno
+        self.detail = message
+
+
 def load_project(config_path: Path) -> ProjectConfig:
     """Load a project.toml file from disk and validate it."""
     if not config_path.exists():
         raise FileNotFoundError(f"Project config not found: {config_path}")
 
-    with config_path.open("rb") as handle:
-        raw = tomllib.load(handle)
+    try:
+        with config_path.open("rb") as handle:
+            raw = tomllib.load(handle)
+    except tomllib.TOMLDecodeError as exc:
+        # tomllib's message often embeds "(at line N, column M)" — surface it.
+        lineno = getattr(exc, "lineno", None)
+        raise ProjectConfigError(f"invalid TOML: {exc}", path=config_path, lineno=lineno) from exc
 
     base_dir = config_path.parent.resolve()
     name = raw.get("name") or base_dir.name
@@ -75,14 +93,21 @@ def load_project(config_path: Path) -> ProjectConfig:
     scrape_raw = raw.get("scrape", {})
     mode = scrape_raw.get("mode", "subreddit")
     if mode not in VALID_MODES:
-        raise ValueError(f"Invalid scrape.mode: {mode!r}. Must be one of {sorted(VALID_MODES)}.")
+        raise ProjectConfigError(
+            f"invalid scrape.mode: {mode!r}. Must be one of {sorted(VALID_MODES)}.",
+            path=config_path,
+        )
     sort = scrape_raw.get("sort", "top")
     if sort not in VALID_SORTS:
-        raise ValueError(f"Invalid scrape.sort: {sort!r}. Must be one of {sorted(VALID_SORTS)}.")
+        raise ProjectConfigError(
+            f"invalid scrape.sort: {sort!r}. Must be one of {sorted(VALID_SORTS)}.",
+            path=config_path,
+        )
     time_filter = scrape_raw.get("time_filter", "month")
     if time_filter not in VALID_TIME_FILTERS:
-        raise ValueError(
-            f"Invalid scrape.time_filter: {time_filter!r}. Must be one of {sorted(VALID_TIME_FILTERS)}."
+        raise ProjectConfigError(
+            f"invalid scrape.time_filter: {time_filter!r}. Must be one of {sorted(VALID_TIME_FILTERS)}.",
+            path=config_path,
         )
 
     scrape = ScrapeConfig(
@@ -104,9 +129,15 @@ def load_project(config_path: Path) -> ProjectConfig:
     )
 
     if mode == "subreddit" and not scrape.subreddit:
-        raise ValueError("scrape.mode='subreddit' requires scrape.subreddit to be set.")
+        raise ProjectConfigError(
+            "scrape.mode='subreddit' requires scrape.subreddit to be set.",
+            path=config_path,
+        )
     if mode == "search" and not scrape.terms_file:
-        raise ValueError("scrape.mode='search' requires scrape.terms_file to be set.")
+        raise ProjectConfigError(
+            "scrape.mode='search' requires scrape.terms_file to be set.",
+            path=config_path,
+        )
 
     analyze_raw = raw.get("analyze", {})
     analyze = AnalyzeConfig(
@@ -128,7 +159,10 @@ def load_project(config_path: Path) -> ProjectConfig:
     elif isinstance(allowed_subs_value, list):
         allowed_subreddits = {str(item).casefold() for item in allowed_subs_value}
     else:
-        raise ValueError("relevance.allowed_subreddits must be a list of subreddit names")
+        raise ProjectConfigError(
+            "relevance.allowed_subreddits must be a list of subreddit names",
+            path=config_path,
+        )
     relevance = RelevanceConfig(
         keywords=[str(item) for item in keywords],
         allowed_subreddits=allowed_subreddits,
@@ -164,8 +198,3 @@ def find_project_config(path_or_dir: Path) -> Path:
         f"Could not find project.toml at {path_or_dir!s}. "
         f"Pass a path to the file or a directory that contains one."
     )
-
-
-# Convenience for tests / older Python checks.
-if sys.version_info < (3, 11):  # pragma: no cover
-    raise RuntimeError("reddit-researcher requires Python 3.11+ for tomllib.")

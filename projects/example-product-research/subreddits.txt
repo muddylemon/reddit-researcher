@@ -1,0 +1,6 @@
+# Review-heavy subreddits with strong first-person ownership reports.
+# Add or remove based on the product category you're researching.
+BuyItForLife
+headphones
+audiophile
+HeadphoneAdvice

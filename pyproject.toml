@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "reddit-researcher"
-version = "0.0.1b0"
+version = "0.0.2b0"
 description = "Run local Reddit research jobs and pipe results through a local Ollama model."
 readme = "README.md"
 license = { text = "MIT" }
@@ -34,6 +34,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0,<9.0.0",
+    "ruff>=0.6.0,<1.0.0",
 ]
 
 [project.scripts]
@@ -51,3 +52,25 @@ exclude = ["tests*", "runs*", "projects*"]
 minversion = "8.0"
 addopts = "-q"
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+extend-exclude = ["runs", ".venv"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # bugbear
+    "UP",  # pyupgrade
+    "W",   # pycodestyle warnings
+]
+ignore = [
+    "E501", # line length is governed by formatter
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

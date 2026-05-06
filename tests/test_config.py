@@ -87,7 +87,7 @@ def test_invalid_mode_rejected(tmp_path: Path) -> None:
         subreddit = "Supplements"
         """,
     )
-    with pytest.raises(ValueError, match="Invalid scrape.mode"):
+    with pytest.raises(ValueError, match="invalid scrape.mode"):
         load_project(config_path)
 
 

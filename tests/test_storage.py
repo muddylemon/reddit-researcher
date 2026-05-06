@@ -41,7 +41,7 @@ def test_write_json_pretty_prints(tmp_path: Path) -> None:
     write_json(path, {"hello": "world"})
     content = path.read_text(encoding="utf-8")
     assert "\n" in content
-    assert "\"hello\"" in content
+    assert '"hello"' in content
 
 
 def test_write_text_creates_parents(tmp_path: Path) -> None:

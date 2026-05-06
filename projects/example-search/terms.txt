@@ -1,5 +1,0 @@
-# One search term per line. Lines starting with '#' are ignored.
-# Replace these with the names or phrases relevant to your research.
-Dr Andy Galpin
-Dr Rhonda Patrick
-Peter Attia

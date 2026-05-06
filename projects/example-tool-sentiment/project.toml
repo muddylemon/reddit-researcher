@@ -1,0 +1,44 @@
+# Example: gauge developer sentiment around a slate of dev tools or frameworks.
+# Run with: reddit-researcher run projects/example-tool-sentiment
+#
+# Useful for: deciding whether to adopt a new tool, writing comparison posts,
+# or auditing how the community is talking about your project.
+
+name = "tool-sentiment"
+description = "Compare how dev-focused subreddits talk about a slate of tools or frameworks."
+
+[scrape]
+mode = "search"
+terms_file = "terms.txt"
+subreddits_file = "subreddits.txt"
+exact_phrase = true
+sort = "top"
+time_filter = "year"
+post_limit = 15
+comment_limit = 5
+pause_seconds = 1.5
+max_retries = 5
+
+[analyze]
+model = "qwen3:8b"
+prompt_file = "prompt.md"
+chunk_char_limit = 12000
+ollama_timeout_seconds = 600
+
+[relevance]
+# Tuned to filter out job posts, "show HN" style ads, and off-topic name collisions.
+# Many tool names are also common English words (Bun, Astro, Remix), so these keywords
+# carry real weight here.
+keywords = [
+    "framework",
+    "library",
+    "package",
+    "performance",
+    "benchmark",
+    "migrated",
+    "switched",
+    "production",
+    "experience",
+    "compared",
+    "vs",
+]

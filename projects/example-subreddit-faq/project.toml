@@ -1,0 +1,25 @@
+# Example: mine recurring questions and misconceptions in r/personalfinance.
+# Run with: reddit-researcher run projects/example-subreddit-faq
+#
+# This is the canonical "what does this community keep asking?" template.
+# Swap `subreddit` for any community you want to study (cooking, woodworking,
+# parenting, AskHistorians, etc.) — the prompt is intentionally generic.
+
+name = "subreddit-faq"
+description = "Recurring questions and misconceptions in a single subreddit."
+
+[scrape]
+mode = "subreddit"
+subreddit = "personalfinance"
+sort = "top"
+time_filter = "month"
+post_limit = 30
+comment_limit = 10
+pause_seconds = 1.0
+max_retries = 5
+
+[analyze]
+model = "qwen3:8b"
+prompt_file = "prompt.md"
+chunk_char_limit = 12000
+ollama_timeout_seconds = 600

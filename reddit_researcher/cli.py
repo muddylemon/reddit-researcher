@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 from . import __version__
 from .config import (
     AnalyzeConfig,
     ProjectConfig,
+    ProjectConfigError,
     ScrapeConfig,
     find_project_config,
     load_project,
@@ -18,10 +20,16 @@ from .pipeline import (
     scrape_subreddit,
 )
 from .relevance import RelevanceConfig
-
+from .templates import scaffold_project
+from .views import (
+    list_projects,
+    list_runs,
+    summarize_run,
+)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_OUTPUT_ROOT = REPO_ROOT / "runs"
+DEFAULT_PROJECTS_ROOT = REPO_ROOT / "projects"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -42,7 +50,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run_parser.add_argument("project", help="Path to project.toml or a directory containing one.")
     run_parser.add_argument("--output-root", default=None, help="Override the project's runs/ directory.")
-    run_parser.add_argument("--run-dir", default=None, help="Existing run directory to resume into (search mode).")
+    run_parser.add_argument(
+        "--run-dir", default=None, help="Existing run directory to resume into (search mode)."
+    )
     run_parser.add_argument("--skip-extract", action="store_true", help="Scrape only; do not call Ollama.")
     run_parser.add_argument("--start-term-index", type=int, default=1)
     run_parser.add_argument("--term-limit", type=int, default=None)
@@ -73,6 +83,70 @@ def build_parser() -> argparse.ArgumentParser:
     )
     extract_parser.add_argument("run_dir", help="Path to an existing run directory.")
     _add_analyze_overrides(extract_parser, require_prompt=True)
+
+    init_parser = subparsers.add_parser(
+        "init",
+        help="Scaffold a new project folder under projects/.",
+    )
+    init_parser.add_argument("name", help="Project folder name (a slug under projects/).")
+    init_parser.add_argument(
+        "--mode",
+        choices=["subreddit", "search"],
+        default="subreddit",
+        help="Project mode. 'subreddit' targets one community; 'search' targets terms.",
+    )
+    init_parser.add_argument("--subreddit", help="Subreddit name (required for --mode subreddit).")
+    init_parser.add_argument(
+        "--term",
+        action="append",
+        default=[],
+        help="Add a starter search term (repeatable). Search mode only.",
+    )
+    init_parser.add_argument(
+        "--allowlist-subreddit",
+        action="append",
+        default=[],
+        help="Add a starter subreddit to the search allowlist (repeatable).",
+    )
+    init_parser.add_argument("--model", default="qwen3:8b", help="Default Ollama model tag.")
+    init_parser.add_argument("--description", default="", help="One-line project description.")
+    init_parser.add_argument(
+        "--projects-dir",
+        default=str(DEFAULT_PROJECTS_ROOT),
+        help="Where the new project folder is created (default: projects/).",
+    )
+    init_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite existing files in the target folder.",
+    )
+
+    list_parser = subparsers.add_parser(
+        "list",
+        help="List available projects and recent runs.",
+    )
+    list_parser.add_argument(
+        "--projects-dir",
+        default=str(DEFAULT_PROJECTS_ROOT),
+        help="Override the projects/ directory.",
+    )
+    list_parser.add_argument(
+        "--runs-dir",
+        default=str(DEFAULT_OUTPUT_ROOT),
+        help="Override the runs/ directory.",
+    )
+    list_parser.add_argument(
+        "--runs-limit",
+        type=int,
+        default=20,
+        help="Max number of recent runs to show.",
+    )
+
+    review_parser = subparsers.add_parser(
+        "review",
+        help="Print a one-screen summary of an existing run folder.",
+    )
+    review_parser.add_argument("run_dir", help="Path to a run directory.")
 
     return parser
 
@@ -142,6 +216,14 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
+    try:
+        return _dispatch(args, parser)
+    except ProjectConfigError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+
+def _dispatch(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
     if args.command == "run":
         config_path = find_project_config(Path(args.project))
         project = load_project(config_path)
@@ -187,6 +269,38 @@ def main(argv: list[str] | None = None) -> int:
         analyze_cfg = _apply_analyze_overrides(AnalyzeConfig(), args)
         final_path = extract_from_run(run_dir=Path(args.run_dir), analyze=analyze_cfg)
         print(final_path)
+        return 0
+
+    if args.command == "init":
+        projects_dir = Path(args.projects_dir)
+        target = projects_dir / args.name
+        written = scaffold_project(
+            project_dir=target,
+            mode=args.mode,
+            subreddit=args.subreddit,
+            terms=args.term,
+            subreddits=args.allowlist_subreddit,
+            model=args.model,
+            description=args.description,
+            force=args.force,
+        )
+        if written:
+            print(f"Created project at {target}:")
+            for path in written:
+                print(f"  + {path.relative_to(target)}")
+            print(f"\nNext: edit {target / 'prompt.md'}, then run:")
+            print(f"  reddit-researcher run {target}")
+        else:
+            print(f"Project at {target} already populated; nothing changed. Pass --force to overwrite.")
+        return 0
+
+    if args.command == "list":
+        print(list_projects(Path(args.projects_dir)))
+        print(list_runs(Path(args.runs_dir), limit=args.runs_limit))
+        return 0
+
+    if args.command == "review":
+        print(summarize_run(Path(args.run_dir)), end="")
         return 0
 
     parser.error(f"Unsupported command: {args.command}")

@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime, timezone
+from collections.abc import Iterable
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Iterable
 
 
 def slugify(value: str) -> str:
@@ -14,7 +14,7 @@ def slugify(value: str) -> str:
 
 
 def timestamp_slug() -> str:
-    return datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    return datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
 
 
 def create_run_dir(output_root: Path, scope: str) -> Path:

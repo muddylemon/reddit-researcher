@@ -6,4 +6,4 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-reddit-researcher run projects/example-supplements
+reddit-researcher run projects/example-subreddit-faq

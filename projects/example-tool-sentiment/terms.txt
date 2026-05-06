@@ -1,0 +1,6 @@
+# Dev tools or frameworks to compare. Replace with your own.
+# Tip: pair tools that compete (Astro vs Next.js, Bun vs Node, Vite vs Webpack)
+# so the comparison has signal.
+Astro
+SvelteKit
+Bun
