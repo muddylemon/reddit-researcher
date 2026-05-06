@@ -1,0 +1,85 @@
+# --- Python ----------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.pyd
+
+# Packaging / build
+*.egg
+*.egg-info/
+.eggs/
+build/
+dist/
+wheels/
+pip-wheel-metadata/
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Environment files
+.env
+.env.*
+!.env.example
+.envrc
+
+# --- Tooling ---------------------------------------------------------------
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.pytype/
+.dmypy.json
+dmypy.json
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+*.cover
+.cache/
+
+# Type stubs / generated
+*.pyi.bak
+
+# --- Editors / IDEs --------------------------------------------------------
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.spyderproject
+.spyproject
+.ropeproject
+
+# --- OS --------------------------------------------------------------------
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# --- Logs ------------------------------------------------------------------
+*.log
+logs/
+!reddit_researcher/**/logs/
+
+# --- Reddit Researcher specific -------------------------------------------
+# Run output is large, regeneratable, and may contain user-specific Reddit data.
+runs/
+
+# Local-only project folders. Anything under projects/local-* is gitignored
+# so users can keep private research projects in-repo without committing them.
+projects/local-*/
+
+# Optional model/prompt scratchpads users may keep next to a project.
+*.scratch.md
+*.local.toml

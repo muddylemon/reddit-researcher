@@ -1,0 +1,35 @@
+# Example: search Reddit for named experts and summarize each one's discussion.
+# Run with: reddit-researcher run projects/example-search
+
+name = "experts-on-reddit"
+description = "Find Reddit discussion of a list of named experts and summarize each."
+
+[scrape]
+mode = "search"
+terms_file = "terms.txt"
+subreddits_file = "subreddits.txt"
+exact_phrase = true
+sort = "top"
+time_filter = "all"
+post_limit = 10
+comment_limit = 3
+pause_seconds = 1.5
+max_retries = 5
+
+[analyze]
+model = "qwen3:8b"
+prompt_file = "prompt.md"
+chunk_char_limit = 12000
+ollama_timeout_seconds = 600
+
+[relevance]
+# Optional. When set, posts must contain at least one of these keywords (in title,
+# body, or comments) to clear the relevance pass and reach the LLM. Keep this list
+# small and topical; an empty list means "no keyword filter".
+keywords = [
+    "interview",
+    "podcast",
+    "research",
+    "study",
+    "book",
+]
