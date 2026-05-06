@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -9,6 +10,27 @@ from .relevance import RelevanceConfig
 VALID_MODES = {"subreddit", "search"}
 VALID_SORTS = {"hot", "new", "top", "rising"}
 VALID_TIME_FILTERS = {"hour", "day", "week", "month", "year", "all"}
+
+# Environment variable names that override built-in defaults. CLI flags and
+# project.toml values still win over these. Documented in docs/architecture.md.
+ENV_OLLAMA_URL = "OLLAMA_URL"
+ENV_OLLAMA_MODEL = "OLLAMA_MODEL"
+ENV_USER_AGENT = "REDDIT_RESEARCHER_USER_AGENT"
+
+
+def _default_ollama_url() -> str:
+    return os.environ.get(ENV_OLLAMA_URL, "http://127.0.0.1:11434")
+
+
+def _default_ollama_model() -> str:
+    return os.environ.get(ENV_OLLAMA_MODEL, "qwen3:8b")
+
+
+def _default_user_agent() -> str:
+    return os.environ.get(
+        ENV_USER_AGENT,
+        "desktop:reddit-researcher:0.1.0 (by /u/local-user)",
+    )
 
 
 @dataclass
@@ -24,14 +46,14 @@ class ScrapeConfig:
     comment_limit: int = 10
     pause_seconds: float = 1.0
     max_retries: int = 5
-    user_agent: str = "desktop:reddit-researcher:0.0.1 (by /u/local-user)"
+    user_agent: str = field(default_factory=_default_user_agent)
 
 
 @dataclass
 class AnalyzeConfig:
-    model: str = "qwen3:8b"
+    model: str = field(default_factory=_default_ollama_model)
     prompt_file: Path | None = None
-    ollama_url: str = "http://127.0.0.1:11434"
+    ollama_url: str = field(default_factory=_default_ollama_url)
     ollama_timeout_seconds: int = 600
     chunk_char_limit: int = 12000
     chunk_limit: int | None = None
@@ -122,10 +144,7 @@ def load_project(config_path: Path) -> ProjectConfig:
         comment_limit=int(scrape_raw.get("comment_limit", 10)),
         pause_seconds=float(scrape_raw.get("pause_seconds", 1.0)),
         max_retries=int(scrape_raw.get("max_retries", 5)),
-        user_agent=scrape_raw.get(
-            "user_agent",
-            "desktop:reddit-researcher:0.0.1 (by /u/local-user)",
-        ),
+        user_agent=scrape_raw.get("user_agent", _default_user_agent()),
     )
 
     if mode == "subreddit" and not scrape.subreddit:
@@ -141,9 +160,9 @@ def load_project(config_path: Path) -> ProjectConfig:
 
     analyze_raw = raw.get("analyze", {})
     analyze = AnalyzeConfig(
-        model=analyze_raw.get("model", "qwen3:8b"),
+        model=analyze_raw.get("model", _default_ollama_model()),
         prompt_file=_resolve_path(analyze_raw.get("prompt_file"), base_dir),
-        ollama_url=analyze_raw.get("ollama_url", "http://127.0.0.1:11434"),
+        ollama_url=analyze_raw.get("ollama_url", _default_ollama_url()),
         ollama_timeout_seconds=int(analyze_raw.get("ollama_timeout_seconds", 600)),
         chunk_char_limit=int(analyze_raw.get("chunk_char_limit", 12000)),
         chunk_limit=analyze_raw.get("chunk_limit"),

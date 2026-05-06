@@ -47,13 +47,36 @@ interface — adding files is fine, renaming or restructuring is a breaking chan
 ## Invariants worth knowing
 
 - **Scrapes are append-only.** A failed scrape does not delete prior progress; resuming into the
-  same `--run-dir` re-uses everything in `normalized/`.
+  same `--run-dir` re-uses everything in `normalized/`. As of 0.1.0 this applies to both subreddit
+  and search modes.
 - **Extractions reuse chunks.** `analysis/chunks/chunk-NNN.md` is reused if non-empty unless
   `--force-reextract` is passed.
 - **Relevance is cheap and deterministic.** It runs in-process with no network calls. The LLM only
   ever sees posts whose decision is `include` or `review`.
 - **Search-mode corpora are grouped by `search_term`.** This lets a per-term prompt produce a
   per-term section in the synthesis.
+- **Manifests are versioned.** Every `manifest.json` written by 0.1.0+ carries a `schema_version`
+  field. See "Manifest schema" below.
+
+## Manifest schema
+
+The current schema version is **1**, defined in `reddit_researcher/manifest.py`. Manifests
+written before 0.1.0 do not have this field and are treated as v0; this matters only for
+forward-compat code, since v0 → v1 was a strict superset (the field was added; nothing was
+removed). The version bumps when a *required* field is added, removed, or changes meaning;
+optional additions don't bump it. Each bump gets a CHANGELOG entry with migration guidance.
+
+## Environment variables
+
+Three variables reach into the defaults pipeline:
+
+- `OLLAMA_URL` — replaces the built-in `http://127.0.0.1:11434` endpoint.
+- `OLLAMA_MODEL` — replaces the built-in `qwen3:8b` default model.
+- `REDDIT_RESEARCHER_USER_AGENT` — replaces the polite-default User-Agent header.
+
+Loading order is repo-root `.env` → project `.env` → shell environment → `project.toml` →
+CLI flags, with the higher item always winning. The dotenv parser is in
+`reddit_researcher/env.py` and is intentionally tiny (no expansion, no multi-line values).
 
 ## Why TOML for projects
 

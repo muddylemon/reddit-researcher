@@ -4,6 +4,48 @@ All notable changes to Reddit Researcher are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0-beta] — 2026-05-06
+
+First-stable-line foundations. Knocks out everything in the `0.1.0` roadmap
+milestone except the optional PRAW backend, which gets its own pass.
+
+### Added
+- **Versioned manifest schema.** Every `manifest.json` written by 0.1.0 carries
+  `schema_version: 1`. New `reddit_researcher.manifest` module owns the constant
+  and the read/write helpers. Manifests written before this release implicitly
+  have `schema_version = 0` and are handled gracefully by `reddit-researcher review`.
+- **Subreddit-mode resume.** `scrape_subreddit` now accepts `run_dir=` and appends
+  to existing `normalized/posts.jsonl` instead of overwriting. `reddit-researcher run
+  <project> --run-dir <path>` works for both modes now.
+- **Built-in prompt templates.** Six vetted prompts ship in
+  `reddit_researcher/prompt_templates/`: `question-mining`, `theme-extraction`,
+  `sentiment-comparison`, `tool-evaluation`, `product-research`, `expert-mention`.
+  - `reddit-researcher init <name> --template <id>` seeds `prompt.md` from a template.
+  - `reddit-researcher init --list-templates` shows the catalog.
+  - The default-no-flag behavior of `init` now picks the right template based on
+    `--mode` (subreddit → `question-mining`, search → `sentiment-comparison`).
+- **`.env` support.** Tiny in-tree dotenv parser (no new dependency). `.env`
+  files are loaded from the repo root and from the project folder, with project
+  values overriding repo values, and shell environment values winning over both.
+  Useful keys: `OLLAMA_URL`, `OLLAMA_MODEL`, `REDDIT_RESEARCHER_USER_AGENT`.
+- **Coverage in CI.** `pytest-cov` is a dev dependency; the Linux 3.12 CI job
+  enforces a 70% line-coverage gate. Local: `pytest --cov`.
+
+### Changed
+- `AnalyzeConfig.model` and `AnalyzeConfig.ollama_url` defaults now read from
+  `OLLAMA_MODEL` and `OLLAMA_URL` env vars when set. `ScrapeConfig.user_agent`
+  honors `REDDIT_RESEARCHER_USER_AGENT`. CLI flags and `project.toml` values
+  still win over env-derived defaults.
+- `scrape_subreddit` writes a checkpointing manifest with `status: starting/
+  fetching_comments/complete`, matching search-mode behavior. The status field
+  is now part of the schema for both modes.
+
+### Internal
+- New `reddit_researcher.env` and `reddit_researcher.manifest` modules.
+- `reddit_researcher.prompt_templates` is a package-data directory of `.md` files,
+  exposed through a small loader.
+- 67 tests passing (was 35), 74.5% line coverage.
+
 ## [0.0.2-beta] — 2026-05-06
 
 Beta polish pass — knocks out the first roadmap milestone.

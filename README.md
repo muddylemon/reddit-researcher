@@ -2,7 +2,7 @@
 
 > Local Reddit research jobs, piped through a local Ollama model. Built to fork.
 
-**Status:** beta `0.0.2`
+**Status:** beta `0.1.0`
 
 Reddit Researcher is a small, opinionated Python CLI for running structured research on Reddit.
 You define a **project** (a folder with a TOML config and a prompt), point the tool at it, and
@@ -162,7 +162,21 @@ Scaffold a new project in seconds:
 ```bash
 reddit-researcher init my-research --mode subreddit --subreddit Programming
 reddit-researcher init game-buzz --mode search --term "Hollow Knight Silksong" --term "GTA VI"
+reddit-researcher init expert-mentions --mode search --template expert-mention
+reddit-researcher init --list-templates
 ```
+
+### Environment variables and `.env`
+
+Reddit Researcher reads these env vars (and a per-project `.env` file, if present):
+
+| Variable | Purpose |
+|---|---|
+| `OLLAMA_URL` | Override the Ollama endpoint. Defaults to `http://127.0.0.1:11434`. |
+| `OLLAMA_MODEL` | Default model when a project doesn't pin one. |
+| `REDDIT_RESEARCHER_USER_AGENT` | Override the User-Agent sent to Reddit. |
+
+Precedence (lowest to highest): code defaults → repo-root `.env` → project `.env` → shell environment → `project.toml` → CLI flags. Shell env vars are never overwritten by `.env` files.
 
 Common flags (see `reddit-researcher <cmd> --help` for the full list):
 

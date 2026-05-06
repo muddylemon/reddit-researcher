@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from .config import AnalyzeConfig, ProjectConfig, ScrapeConfig
+from .manifest import stamp as stamp_manifest
 from .ollama_client import OllamaClient
 from .progress import RunLogger
 from .prompting import (
@@ -26,7 +27,6 @@ from .storage import (
     read_jsonl,
     slugify,
     write_json,
-    write_jsonl,
     write_text,
 )
 
@@ -37,9 +37,24 @@ def scrape_subreddit(
     output_root: Path,
     scrape: ScrapeConfig,
     relevance: RelevanceConfig | None = None,
+    run_dir: Path | None = None,
 ) -> Path:
-    """Scrape a single subreddit's hot/new/top/rising listing."""
-    run_dir = create_run_dir(output_root=output_root, scope=subreddit)
+    """Scrape a single subreddit's hot/new/top/rising listing.
+
+    If `run_dir` is supplied and already exists, the scrape resumes into that
+    folder: posts already written to `normalized/posts.jsonl` are skipped, and
+    new posts are appended. This makes subreddit-mode runs as resumable as
+    search-mode runs.
+    """
+    if run_dir is None:
+        run_dir = create_run_dir(output_root=output_root, scope=subreddit)
+    else:
+        (run_dir / "raw" / "comments").mkdir(parents=True, exist_ok=True)
+        (run_dir / "normalized").mkdir(parents=True, exist_ok=True)
+        (run_dir / "analysis" / "chunks").mkdir(parents=True, exist_ok=True)
+        (run_dir / "logs").mkdir(parents=True, exist_ok=True)
+        (run_dir / "review").mkdir(parents=True, exist_ok=True)
+
     logger = RunLogger(run_dir)
     client = RedditClient(
         user_agent=scrape.user_agent,
@@ -47,61 +62,82 @@ def scrape_subreddit(
         max_retries=scrape.max_retries,
     )
 
+    posts_path = run_dir / "normalized" / "posts.jsonl"
+    comments_path = run_dir / "normalized" / "comments.jsonl"
+    relevant_posts_path = run_dir / "normalized" / "relevant_posts.jsonl"
+    review_path = run_dir / "review" / "relevance_review.jsonl"
+    for path in (posts_path, comments_path, relevant_posts_path, review_path):
+        if not path.exists():
+            write_text(path, "")
+
+    processed_post_ids = {row.get("id") for row in read_jsonl(posts_path) if row.get("id")}
+    all_post_count = len(processed_post_ids)
+    all_comment_count = sum(1 for _ in read_jsonl(comments_path)) if comments_path.stat().st_size > 0 else 0
+
+    manifest = {
+        "mode": "subreddit",
+        "status": "starting",
+        "subreddit": subreddit,
+        "sort": scrape.sort,
+        "time_filter": scrape.time_filter,
+        "post_limit": scrape.post_limit,
+        "comment_limit": scrape.comment_limit,
+        "pause_seconds": scrape.pause_seconds,
+        "max_retries": scrape.max_retries,
+        "scraped_at_utc": datetime.now(UTC).isoformat(),
+        "post_count": all_post_count,
+        "comment_count": all_comment_count,
+    }
+
+    def checkpoint(status: str) -> None:
+        manifest["status"] = status
+        manifest["updated_at_utc"] = datetime.now(UTC).isoformat()
+        manifest["post_count"] = all_post_count
+        manifest["comment_count"] = all_comment_count
+        write_json(run_dir / "manifest.json", stamp_manifest(manifest))
+
+    checkpoint("starting")
     logger.info(f"Starting subreddit scrape r/{subreddit} into {run_dir}")
+
     posts, raw_posts = client.fetch_posts(
         subreddit=subreddit,
         sort=scrape.sort,
         limit=scrape.post_limit,
         time_filter=scrape.time_filter,
     )
+    write_json(run_dir / "raw" / "posts.json", raw_posts)
 
-    all_comments: list[dict] = []
-    raw_comment_payloads: dict[str, object] = {}
-    relevance_rows: list[dict] = []
+    new_posts = [post for post in posts if post.id not in processed_post_ids]
+    if len(new_posts) < len(posts):
+        logger.info(
+            f"Resuming: {len(posts) - len(new_posts)} of {len(posts)} posts already in normalized/posts.jsonl"
+        )
 
-    for index, post in enumerate(posts, start=1):
-        logger.info(f"Comment fetch {index}/{len(posts)}: {post.id}")
+    for index, post in enumerate(new_posts, start=1):
+        logger.info(f"Comment fetch {index}/{len(new_posts)}: {post.id}")
         comments, raw_comments = client.fetch_comments(
             permalink=post.permalink,
             post_id=post.id,
             limit=scrape.comment_limit,
         )
         post.comments = comments
-        all_comments.extend(comment.to_dict() for comment in comments)
-        raw_comment_payloads[post.id] = raw_comments
+        write_json(run_dir / "raw" / "comments" / f"{post.id}.json", raw_comments)
+        post_payload = post.to_dict()
+        append_jsonl(posts_path, post_payload)
+        for comment in comments:
+            append_jsonl(comments_path, comment.to_dict())
         if relevance is not None:
-            review = review_post_relevance(post.to_dict(), relevance)
-            relevance_rows.append(review)
+            review = review_post_relevance(post_payload, relevance)
+            append_jsonl(review_path, review)
+            if review["decision"] in {"include", "review"}:
+                append_jsonl(relevant_posts_path, post_payload)
+        all_post_count += 1
+        all_comment_count += len(comments)
+        processed_post_ids.add(post.id)
+        checkpoint("fetching_comments")
 
-    write_json(run_dir / "raw" / "posts.json", raw_posts)
-    for post_id, payload in raw_comment_payloads.items():
-        write_json(run_dir / "raw" / "comments" / f"{post_id}.json", payload)
-
-    write_jsonl(run_dir / "normalized" / "posts.jsonl", (post.to_dict() for post in posts))
-    write_jsonl(run_dir / "normalized" / "comments.jsonl", all_comments)
-
-    if relevance_rows:
-        write_jsonl(run_dir / "review" / "relevance_review.jsonl", relevance_rows)
-        relevant_posts = [
-            post.to_dict()
-            for post, review in zip(posts, relevance_rows, strict=True)
-            if review["decision"] in {"include", "review"}
-        ]
-        write_jsonl(run_dir / "normalized" / "relevant_posts.jsonl", relevant_posts)
-
-    manifest = {
-        "mode": "subreddit",
-        "subreddit": subreddit,
-        "sort": scrape.sort,
-        "time_filter": scrape.time_filter,
-        "post_limit": scrape.post_limit,
-        "comment_limit": scrape.comment_limit,
-        "scraped_at_utc": datetime.now(UTC).isoformat(),
-        "post_count": len(posts),
-        "comment_count": len(all_comments),
-    }
-    write_json(run_dir / "manifest.json", manifest)
-    logger.info(f"Completed subreddit scrape: {len(posts)} posts, {len(all_comments)} comments")
+    checkpoint("complete")
+    logger.info(f"Completed subreddit scrape: {all_post_count} posts, {all_comment_count} comments")
     return run_dir
 
 
@@ -191,7 +227,7 @@ def scrape_search_terms(
         manifest["search_fetch_errors"] = search_fetch_errors
         manifest["comment_fetch_error_count"] = len(comment_fetch_errors)
         manifest["comment_fetch_errors"] = comment_fetch_errors
-        write_json(run_dir / "manifest.json", manifest)
+        write_json(run_dir / "manifest.json", stamp_manifest(manifest))
 
     candidate_posts_path = run_dir / "normalized" / "candidate_posts.jsonl"
     posts_path = run_dir / "normalized" / "posts.jsonl"
@@ -381,7 +417,7 @@ def extract_from_run(
             "analyzed_at_utc": datetime.now(UTC).isoformat(),
             "final_output": str(final_path),
         }
-        write_json(manifest_path, manifest)
+        write_json(manifest_path, stamp_manifest(manifest))
         return final_path
 
     corpus = build_search_corpus(posts=posts) if is_search else build_corpus(posts=posts, comments=comments)
@@ -435,7 +471,7 @@ def extract_from_run(
         "analyzed_at_utc": datetime.now(UTC).isoformat(),
         "final_output": str(final_path),
     }
-    write_json(manifest_path, manifest)
+    write_json(manifest_path, stamp_manifest(manifest))
     return final_path
 
 
@@ -450,12 +486,12 @@ def run_project(
 ) -> Path:
     """Run a project end-to-end: scrape according to mode, then extract."""
     if project.scrape.mode == "subreddit":
-        # Subreddit mode does not yet support resuming; --run-dir is honored only by search mode.
         scrape_dir = scrape_subreddit(
             subreddit=project.scrape.subreddit or "",
             output_root=output_root,
             scrape=project.scrape,
             relevance=project.relevance,
+            run_dir=run_dir,
         )
     else:
         scrape_dir = scrape_search_terms(

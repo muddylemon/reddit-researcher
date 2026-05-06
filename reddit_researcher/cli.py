@@ -13,12 +13,14 @@ from .config import (
     find_project_config,
     load_project,
 )
+from .env import load_dotenvs_for
 from .pipeline import (
     extract_from_run,
     run_project,
     scrape_search_terms,
     scrape_subreddit,
 )
+from .prompt_templates import BUILTIN_TEMPLATES, list_templates
 from .relevance import RelevanceConfig
 from .templates import scaffold_project
 from .views import (
@@ -88,7 +90,11 @@ def build_parser() -> argparse.ArgumentParser:
         "init",
         help="Scaffold a new project folder under projects/.",
     )
-    init_parser.add_argument("name", help="Project folder name (a slug under projects/).")
+    init_parser.add_argument(
+        "name",
+        nargs="?",
+        help="Project folder name (a slug under projects/). Omitted with --list-templates.",
+    )
     init_parser.add_argument(
         "--mode",
         choices=["subreddit", "search"],
@@ -108,8 +114,19 @@ def build_parser() -> argparse.ArgumentParser:
         default=[],
         help="Add a starter subreddit to the search allowlist (repeatable).",
     )
-    init_parser.add_argument("--model", default="qwen3:8b", help="Default Ollama model tag.")
+    init_parser.add_argument("--model", default=None, help="Default Ollama model tag.")
     init_parser.add_argument("--description", default="", help="One-line project description.")
+    init_parser.add_argument(
+        "--template",
+        choices=sorted(BUILTIN_TEMPLATES.keys()),
+        default=None,
+        help="Built-in prompt template to seed prompt.md with. Defaults to one matching --mode.",
+    )
+    init_parser.add_argument(
+        "--list-templates",
+        action="store_true",
+        help="List available built-in prompt templates and exit.",
+    )
     init_parser.add_argument(
         "--projects-dir",
         default=str(DEFAULT_PROJECTS_ROOT),
@@ -216,6 +233,11 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
+    # Load .env files into os.environ as early as possible so config defaults
+    # (which read OLLAMA_URL etc.) see them. The project's own .env, if any,
+    # is loaded again with override=True once we know the project dir.
+    load_dotenvs_for(project_dir=None, repo_root=REPO_ROOT)
+
     try:
         return _dispatch(args, parser)
     except ProjectConfigError as exc:
@@ -226,6 +248,7 @@ def main(argv: list[str] | None = None) -> int:
 def _dispatch(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
     if args.command == "run":
         config_path = find_project_config(Path(args.project))
+        load_dotenvs_for(project_dir=config_path.parent, repo_root=REPO_ROOT)
         project = load_project(config_path)
         project.analyze = _apply_analyze_overrides(project.analyze, args)
         output_root = _resolve_output_root(project, args.output_root)
@@ -272,16 +295,26 @@ def _dispatch(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
         return 0
 
     if args.command == "init":
+        if args.list_templates:
+            print("Available prompt templates:")
+            for name, mode, description in list_templates():
+                print(f"  {name:<22} [{mode}]  {description}")
+            return 0
+        if not args.name:
+            parser.error("init: a project name is required (or pass --list-templates).")
         projects_dir = Path(args.projects_dir)
         target = projects_dir / args.name
+        from .config import _default_ollama_model
+
         written = scaffold_project(
             project_dir=target,
             mode=args.mode,
             subreddit=args.subreddit,
             terms=args.term,
             subreddits=args.allowlist_subreddit,
-            model=args.model,
+            model=args.model or _default_ollama_model(),
             description=args.description,
+            prompt_template=args.template,
             force=args.force,
         )
         if written:

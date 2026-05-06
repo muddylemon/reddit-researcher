@@ -62,6 +62,30 @@ def test_scaffold_does_not_overwrite_without_force(tmp_path: Path) -> None:
     assert (project_dir / "prompt.md").read_text(encoding="utf-8") == "custom content"
 
 
+def test_scaffold_uses_explicit_template(tmp_path: Path) -> None:
+    project_dir = tmp_path / "demo"
+    scaffold_project(
+        project_dir=project_dir,
+        mode="search",
+        terms=["x"],
+        prompt_template="expert-mention",
+    )
+    body = (project_dir / "prompt.md").read_text(encoding="utf-8")
+    assert "named person" in body or "named people" in body.lower()
+
+
+def test_scaffold_default_template_matches_mode(tmp_path: Path) -> None:
+    subreddit_dir = tmp_path / "sub"
+    scaffold_project(project_dir=subreddit_dir, mode="subreddit", subreddit="Foo")
+    sub_body = (subreddit_dir / "prompt.md").read_text(encoding="utf-8")
+    assert "FAQ" in sub_body or "questions" in sub_body.lower()
+
+    search_dir = tmp_path / "search"
+    scaffold_project(project_dir=search_dir, mode="search")
+    search_body = (search_dir / "prompt.md").read_text(encoding="utf-8")
+    assert "search term" in search_body.lower()
+
+
 def test_scaffold_force_overwrites(tmp_path: Path) -> None:
     project_dir = tmp_path / "demo"
     scaffold_project(project_dir=project_dir, mode="subreddit", subreddit="Foo")

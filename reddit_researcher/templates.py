@@ -3,49 +3,18 @@
 Each scaffolder writes a small set of files under the project directory: a
 `project.toml`, a starter `prompt.md`, and (for search mode) `terms.txt` and
 `subreddits.txt`. Existing files are never overwritten unless `force=True`.
+
+Prompts are sourced from the built-in template library in
+`reddit_researcher.prompt_templates`. Pass `prompt_template=<name>` to pick one
+explicitly; otherwise the scrape mode picks a sensible default.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
+from .prompt_templates import default_template_for, template_text
 from .storage import slugify
-
-SUBREDDIT_PROMPT = """\
-Identify the most common questions and recurring themes in this subreddit.
-
-Focus on:
-- recurring patterns rather than one-off anecdotes
-- practical questions users keep asking
-- uncertainty, confusion, or misinformation that keeps showing up
-
-In the final answer:
-- group similar items together
-- rank the most common themes first
-- include short representative examples when helpful, citing post or comment ids in brackets
-- keep the tone analytical and evidence-aware
-"""
-
-
-SEARCH_PROMPT = """\
-For each search term, determine whether the supplied Reddit posts and comments are meaningfully
-about the named topic.
-
-Cost-control rule:
-
-- If a chunk has no meaningful evidence for the topic, write exactly one sentence beginning
-  `Not relevant:` and stop. Do not add headings, summaries, or commentary for irrelevant chunks.
-
-When the chunk does have meaningful discussion, output a Markdown section per term with:
-
-- A concise relevance judgment.
-- A summary of the Reddit context (which subreddits, what posts are about, why the term came up).
-- A summary of the commentary: praise, criticism, recurring questions, anecdotes, disagreements.
-- Representative post or comment ids in brackets when they support a point.
-
-Use only the supplied Reddit content.
-"""
-
 
 TERMS_TEMPLATE = """\
 # One search term per line. Lines starting with '#' are ignored.
@@ -125,12 +94,14 @@ def scaffold_project(
     subreddits: list[str] | None = None,
     model: str = "qwen3:8b",
     description: str = "",
+    prompt_template: str | None = None,
     force: bool = False,
 ) -> list[Path]:
     """Create a new project folder.
 
     Returns the list of files written. Skips files that already exist unless
-    `force=True`.
+    `force=True`. `prompt_template` selects a built-in prompt by name; when None,
+    a sensible default is chosen for the mode.
     """
     if mode not in {"subreddit", "search"}:
         raise ValueError(f"Invalid mode: {mode!r}. Must be 'subreddit' or 'search'.")
@@ -141,6 +112,9 @@ def scaffold_project(
     name = project_dir.name
     written: list[Path] = []
 
+    template_name = prompt_template or default_template_for(mode)
+    prompt = template_text(template_name)
+
     if mode == "subreddit":
         body = _subreddit_project_toml(
             name=slugify(name),
@@ -148,7 +122,6 @@ def scaffold_project(
             subreddit=subreddit or "",
             model=model,
         )
-        prompt = SUBREDDIT_PROMPT
         files: list[tuple[Path, str]] = [
             (project_dir / "project.toml", body),
             (project_dir / "prompt.md", prompt),
@@ -159,7 +132,6 @@ def scaffold_project(
             description=description or "Reddit search across one or more terms.",
             model=model,
         )
-        prompt = SEARCH_PROMPT
         terms_body = TERMS_TEMPLATE
         if terms:
             terms_body += "\n".join(terms) + "\n"

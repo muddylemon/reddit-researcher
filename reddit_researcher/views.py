@@ -13,6 +13,7 @@ from collections import Counter
 from pathlib import Path
 
 from .config import find_project_config, load_project
+from .manifest import MANIFEST_SCHEMA_VERSION, read_schema_version
 
 
 def _truncate(value: str, limit: int) -> str:
@@ -118,7 +119,13 @@ def summarize_run(run_dir: Path) -> str:
         return f"Manifest is unreadable ({manifest_path}): {exc}\n"
 
     lines: list[str] = []
-    lines.append(f"Run: {run_dir}")
+    schema_version = read_schema_version(manifest)
+    schema_note = (
+        f" (schema v{schema_version}; tool writes v{MANIFEST_SCHEMA_VERSION})"
+        if schema_version != MANIFEST_SCHEMA_VERSION
+        else ""
+    )
+    lines.append(f"Run: {run_dir}{schema_note}")
     mode = manifest.get("mode", "unknown")
     status = manifest.get("status", "complete")
     if mode == "search":
