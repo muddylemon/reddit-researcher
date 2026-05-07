@@ -102,7 +102,11 @@ class SqliteRunSink:
         self.db_path = db_path
         self.conn = sqlite3.connect(db_path)
         self.conn.execute("PRAGMA foreign_keys = ON")
-        self._init_schema()
+        try:
+            self._init_schema()
+        except Exception:
+            self.conn.close()
+            raise
 
     def _init_schema(self) -> None:
         cur = self.conn.cursor()
