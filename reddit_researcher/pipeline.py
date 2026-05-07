@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from .config import AnalyzeConfig, ProjectConfig, ScrapeConfig
+from .corpus_formatters import format_corpus
 from .db import make_sink, sync_run
 from .manifest import normalize_manifest
 from .manifest import stamp as stamp_manifest
@@ -12,8 +13,6 @@ from .ollama_client import OllamaClient
 from .progress import RunLogger
 from .prompting import (
     build_chunk_prompt,
-    build_corpus,
-    build_search_corpus,
     build_synthesis_prompt,
     chunk_text,
     load_prompt_text,
@@ -486,7 +485,12 @@ def extract_from_run(
         write_json(manifest_path, stamp_manifest(manifest))
         return final_path
 
-    corpus = build_search_corpus(posts=posts) if is_search else build_corpus(posts=posts, comments=comments)
+    corpus = format_corpus(
+        mode="search" if is_search else "subreddit",
+        fmt=analyze.corpus_format,
+        posts=posts,
+        comments=None if is_search else comments,
+    )
     all_chunks = chunk_text(corpus, max_chars=analyze.chunk_char_limit)
     chunks = all_chunks[: analyze.chunk_limit] if analyze.chunk_limit is not None else all_chunks
     logger.info(f"Starting Ollama extraction with {len(chunks)} chunks from {run_dir}")
