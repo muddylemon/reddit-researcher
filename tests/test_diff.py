@@ -461,6 +461,35 @@ def test_cli_diff_missing_run_dir_errors(
     assert "manifest" in err.lower() or "not found" in err.lower() or "no such" in err.lower()
 
 
+def test_compute_diff_works_on_duckdb_engine(tmp_path: Path) -> None:
+    """Regression: ensure compute_diff doesn't depend on sqlite-only cursor semantics."""
+    pytest.importorskip("duckdb")
+    storage = StorageConfig(engine="duckdb", db_path=tmp_path / "r.duckdb")
+    sink = make_sink(storage, project_dir=tmp_path)
+    try:
+        run_a = _make_synced_run(
+            sink, tmp_path, scope="AskReddit", ts="20260507-120000",
+            posts=[_post_row("p1"), _post_row("p2")],
+            comments=[_comment_row("c1", "p1")],
+        )
+        run_b = _make_synced_run(
+            sink, tmp_path, scope="AskReddit", ts="20260508-120000",
+            posts=[_post_row("p2"), _post_row("p3")],
+            comments=[_comment_row("c1", "p2"), _comment_row("c2", "p2")],
+        )
+        result = compute_diff(sink, run_a, run_b)
+        assert sorted(result.posts_only_in_a) == ["p1"]
+        assert sorted(result.posts_only_in_b) == ["p3"]
+        assert sorted(result.posts_in_both) == ["p2"]
+        assert result.comments_only_in_a == 0  # c1 in both runs (different post_id but same id)
+        # Note: in our test data, c1 appears in both runs (under different posts), so it's
+        # in_both for the comment_id set diff. c2 is only in B.
+        assert result.comments_only_in_b == 1
+        assert result.comments_in_both == 1
+    finally:
+        sink.close()
+
+
 def test_cli_diff_warnings_to_stderr(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

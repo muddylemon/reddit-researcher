@@ -455,7 +455,8 @@ def _dispatch_diff(args: argparse.Namespace, parser: argparse.ArgumentParser) ->
                 try:
                     sync_run(sink, run_dir)
                 except (FileNotFoundError, OSError) as exc:
-                    parser.error(f"diff: {exc}")
+                    print(f"error: diff sync failed: {exc}", file=sys.stderr)
+                    return 1
         try:
             result = compute_diff(sink, run_a, run_b)
         except LookupError as exc:
@@ -488,7 +489,13 @@ def _needs_sync(sink, run_dir: Path) -> bool:
         return True
     try:
         manifest = _json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
-    except (OSError, _json.JSONDecodeError):
+    except OSError:
+        return False
+    except _json.JSONDecodeError:
+        print(
+            f"warning: corrupt manifest at {run_dir}; using cached sink rows",
+            file=sys.stderr,
+        )
         return False
     updated = manifest.get("updated_at_utc")
     if updated is None:
