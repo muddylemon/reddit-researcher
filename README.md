@@ -2,7 +2,7 @@
 
 > Local Reddit research jobs, piped through a local Ollama model. Built to fork.
 
-**Status:** beta `0.1.1`
+**Status:** beta `0.2.0`
 
 Reddit Researcher is a small, opinionated Python CLI for running structured research on Reddit.
 You define a **project** (a folder with a TOML config and a prompt), point the tool at it, and
@@ -105,6 +105,26 @@ chunk_char_limit = 12000
 ollama_timeout_seconds = 600
 ```
 
+For research questions that span multiple communities, list them all:
+
+```toml
+# projects/missouri-cannabis/project.toml
+name = "missouri-cannabis"
+description = "Reception of Missouri's adult-use program across cannabis communities."
+
+[scrape]
+mode = "subreddit"
+subreddits = ["MissouriMarijuana", "MOCannabis", "trees"]
+sort = "top"
+time_filter = "month"
+post_limit = 25      # per subreddit (75 total here)
+comment_limit = 10
+```
+
+`post_limit` is per-subreddit, matching search-mode's per-term semantics. The
+combined run folder lives at `runs/missourimarijuana-mocannabis-trees/<ts>/`,
+and each post in `normalized/posts.jsonl` carries its source community.
+
 A search-mode project looks like this:
 
 ```toml
@@ -151,7 +171,7 @@ tracking, and more), see [`docs/ideas.md`](docs/ideas.md).
 reddit-researcher init <name>             Scaffold a new projects/<name>/ folder.
 reddit-researcher list                    Show projects and recent runs as a table.
 reddit-researcher run <project>           Load project.toml and run scrape + extract.
-reddit-researcher scrape <subreddit>      One-off subreddit scrape (no project needed).
+reddit-researcher scrape <name> [<name>…]  One-off scrape of one or more subreddits (no project needed).
 reddit-researcher search --terms-file=... One-off Reddit search across one or more terms.
 reddit-researcher extract <run-dir>       Re-run analysis over an already-scraped run folder.
 reddit-researcher review <run-dir>        Print a one-screen summary of a run's manifest.

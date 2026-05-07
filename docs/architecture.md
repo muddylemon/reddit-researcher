@@ -61,11 +61,30 @@ interface — adding files is fine, renaming or restructuring is a breaking chan
 
 ## Manifest schema
 
-The current schema version is **1**, defined in `reddit_researcher/manifest.py`. Manifests
+The current schema version is **2**, defined in `reddit_researcher/manifest.py`. Manifests
 written before 0.1.0 do not have this field and are treated as v0; this matters only for
-forward-compat code, since v0 → v1 was a strict superset (the field was added; nothing was
+forward-compat code, since each version bump has been a strict superset (fields added; nothing
 removed). The version bumps when a *required* field is added, removed, or changes meaning;
 optional additions don't bump it. Each bump gets a CHANGELOG entry with migration guidance.
+
+### Subreddit-mode fields (schema_version 2)
+
+Subreddit-mode supports scraping one or more subreddits via `[scrape].subreddits = ["a", "b",
+"c"]`. Single-subreddit projects (`subreddit = "x"`) are transparently normalised to a
+one-element list at load time. Two new top-level fields appear in `manifest.json` for all
+subreddit-mode runs:
+
+- `subreddits` — list of subreddit names (always present in subreddit-mode, even for a
+  single-sub project).
+- `per_subreddit` — mapping of subreddit name → per-sub counters (`posts_fetched`,
+  `posts_written`, `status`, etc.). Lets callers inspect partial failures when one sub in a
+  multi-sub run errors out while others succeed.
+
+Posts in `normalized/posts.jsonl` carry a `subreddit` field identifying their source
+community, making it straightforward to partition or filter the corpus by sub.
+
+Old (v1) manifests produced by 0.1.x are read forward via `normalize_manifest` without
+rewriting the file — no migration step needed.
 
 ## Environment variables
 
@@ -126,11 +145,9 @@ properties of Reddit's public surface — but they shape how you design a projec
   that obviously *should* match (e.g. `dispensary` in a sub that constantly discusses dispensaries)
   often returns zero results. The `top.json` and `hot.json` listing endpoints work fine. Workarounds:
   use subreddit mode against each sub directly, or switch to the PRAW backend.
-- **A single project targets one subreddit (subreddit mode) or one search across an allowlist
-  (search mode).** There is currently no "scrape these N subreddits' top listings into one
-  combined run" mode. Workaround: use `pipeline.scrape_subreddit()` from a small Python harness
-  with the same `run_dir` for each call. Multi-subreddit subreddit mode is on the
-  [0.2.0 roadmap](roadmap.md).
+- **Subreddit mode now supports multiple subreddits** via `[scrape].subreddits = ["a", "b",
+  "c"]` (shipped in 0.2.0). Search mode still targets one set of terms across an allowlist.
+  See the "Subreddit-mode fields" section under "Manifest schema" for the combined-run layout.
 - **The default JSON backend caps at ~1000 posts per listing.** Reddit's pagination soft-limits
   there. For deeper pulls, switch to PRAW.
 - **Comment trees are top-N, not exhaustive.** `fetch_comments` pulls the top `comment_limit`
