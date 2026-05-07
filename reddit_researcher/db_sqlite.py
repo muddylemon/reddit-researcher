@@ -267,8 +267,13 @@ class SqliteRunSink:
         return sqlite3.connect(uri, uri=True)
 
     def rebuild(self) -> None:
-        # Filled in Task 8.
-        raise NotImplementedError
+        cur = self.conn.cursor()
+        cur.execute("PRAGMA foreign_keys = OFF")
+        for table in ("relevance_decisions", "comments", "posts", "runs", "_schema_meta"):
+            cur.execute(f"DROP TABLE IF EXISTS {table}")
+        cur.execute("PRAGMA foreign_keys = ON")
+        self.conn.commit()
+        self._init_schema()
 
     def close(self) -> None:
         self.conn.close()

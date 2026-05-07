@@ -381,3 +381,40 @@ def test_sync_run_missing_manifest_raises(tmp_path: Path) -> None:
             sync_run(sink, run_dir)
     finally:
         sink.close()
+
+
+def test_schema_version_mismatch_raises(tmp_path: Path) -> None:
+    db_path = tmp_path / "r.db"
+    storage = StorageConfig(db_path=db_path)
+    # Open once to set up schema, then close.
+    make_sink(storage, project_dir=tmp_path).close()
+    # Tamper with the recorded version.
+    conn = sqlite3.connect(db_path)
+    conn.execute("UPDATE _schema_meta SET schema_version = 99")
+    conn.commit()
+    conn.close()
+    with pytest.raises(SchemaVersionMismatch):
+        make_sink(storage, project_dir=tmp_path)
+
+
+def test_rebuild_drops_and_recreates(tmp_path: Path) -> None:
+    storage = StorageConfig(db_path=tmp_path / "r.db")
+    sink = make_sink(storage, project_dir=tmp_path)
+    try:
+        run_dir = _write_full_run(tmp_path)
+        sync_run(sink, run_dir)
+        ro = sink.read_only_connect()
+        try:
+            assert ro.execute("SELECT COUNT(*) FROM posts").fetchone()[0] == 1
+        finally:
+            ro.close()
+        sink.rebuild()
+        ro = sink.read_only_connect()
+        try:
+            # Tables exist but are empty.
+            assert ro.execute("SELECT COUNT(*) FROM posts").fetchone()[0] == 0
+            assert ro.execute("SELECT schema_version FROM _schema_meta").fetchone()[0] == SCHEMA_VERSION
+        finally:
+            ro.close()
+    finally:
+        sink.close()
