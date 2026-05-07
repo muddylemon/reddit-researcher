@@ -208,3 +208,41 @@ def test_insert_posts_search_mode_dedupes_same_post_under_different_terms(tmp_pa
         assert rows == [("p1", "emacs"), ("p1", "vim")]
     finally:
         sink.close()
+
+
+def _comment_row(comment_id: str, post_id: str) -> dict:
+    return {
+        "id": comment_id,
+        "post_id": post_id,
+        "parent_id": f"t3_{post_id}",
+        "author": "bob",
+        "body": "interesting",
+        "score": 3,
+        "created_utc": 1700000100.0,
+        "permalink": f"/r/x/comments/{post_id}/_/{comment_id}/",
+        "depth": 0,
+    }
+
+
+def test_insert_comments_round_trips(tmp_path: Path) -> None:
+    storage = StorageConfig(db_path=tmp_path / "r.db")
+    sink = make_sink(storage, project_dir=tmp_path)
+    try:
+        run_dir = _make_run_dir(tmp_path)
+        manifest = json.loads((run_dir / "manifest.json").read_text())
+        with sink.transaction():
+            sink.upsert_run(run_dir, manifest)
+            sink.insert_comments(
+                run_dir,
+                [_comment_row("c1", "a1"), _comment_row("c2", "a1")],
+            )
+        ro = sink.read_only_connect()
+        try:
+            rows = ro.execute(
+                "SELECT comment_id, post_id, body, score FROM comments ORDER BY comment_id"
+            ).fetchall()
+        finally:
+            ro.close()
+        assert rows == [("c1", "a1", "interesting", 3), ("c2", "a1", "interesting", 3)]
+    finally:
+        sink.close()

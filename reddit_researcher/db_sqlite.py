@@ -209,8 +209,31 @@ class SqliteRunSink:
         )
 
     def insert_comments(self, run_dir: Path, comments: list[dict[str, Any]]) -> None:
-        # Filled in Task 5.
-        raise NotImplementedError
+        if not comments:
+            return
+        run_dir_str = str(run_dir.resolve())
+        rows = [
+            (
+                run_dir_str,
+                str(comment.get("id", "")),
+                str(comment.get("post_id", "")),
+                comment.get("parent_id"),
+                comment.get("author"),
+                str(comment.get("body", "")),
+                int(comment.get("score", 0) or 0),
+                comment.get("created_utc"),
+                str(comment.get("permalink", "")),
+                int(comment.get("depth", 0) or 0),
+            )
+            for comment in comments
+        ]
+        self.conn.executemany(
+            "INSERT INTO comments ("
+            " run_dir, comment_id, post_id, parent_id, author, body, score,"
+            " created_utc, permalink, depth"
+            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            rows,
+        )
 
     def insert_relevance(self, run_dir: Path, decisions: list[dict[str, Any]]) -> None:
         # Filled in Task 6.
