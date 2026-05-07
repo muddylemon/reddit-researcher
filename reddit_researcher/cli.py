@@ -405,7 +405,7 @@ def _dispatch_db(args: argparse.Namespace, parser: argparse.ArgumentParser) -> i
     if args.db_command == "status":
         return _db_status(project, make_sink)
     if args.db_command == "query":
-        parser.error("db query: not implemented yet (Task 12)")
+        return _db_query(args, project, make_sink)
     parser.error(f"Unsupported db command: {args.db_command}")
     return 2
 
@@ -485,6 +485,58 @@ def _db_status(project, make_sink) -> int:
         for run_dir, mode, scope, status, posts, comments in recent:
             print(f"  [{mode}] {scope:<24} {status:<18} {posts}p {comments}c  {run_dir}")
     return 0
+
+
+def _db_query(args, project, make_sink) -> int:
+    import csv
+    import sqlite3
+
+    sink = make_sink(project.storage, project_dir=project.project_dir)
+    try:
+        ro = sink.read_only_connect()
+        try:
+            try:
+                cursor = ro.execute(args.sql)
+            except sqlite3.OperationalError as exc:
+                # Read-only mode in sqlite raises this for any write.
+                print(f"error: {exc}", file=sys.stderr)
+                return 1
+            cols = [d[0] for d in cursor.description] if cursor.description else []
+            rows = cursor.fetchall()
+        finally:
+            ro.close()
+    finally:
+        sink.close()
+
+    if args.format == "json":
+        import json as _json
+
+        payload = [dict(zip(cols, row, strict=False)) for row in rows]
+        print(_json.dumps(payload, ensure_ascii=True))
+        return 0
+    if args.format == "csv":
+        writer = csv.writer(sys.stdout)
+        if cols:
+            writer.writerow(cols)
+        writer.writerows(rows)
+        return 0
+    # table
+    print(_format_table(cols, rows))
+    return 0
+
+
+def _format_table(cols: list[str], rows: list[tuple]) -> str:
+    if not cols:
+        return "(no rows)"
+    string_rows = [[("" if v is None else str(v)) for v in row] for row in rows]
+    widths = [len(c) for c in cols]
+    for row in string_rows:
+        for i, cell in enumerate(row):
+            widths[i] = max(widths[i], len(cell))
+    sep = "  ".join("-" * w for w in widths)
+    header = "  ".join(c.ljust(w) for c, w in zip(cols, widths, strict=False))
+    body = "\n".join("  ".join(cell.ljust(w) for cell, w in zip(row, widths, strict=False)) for row in string_rows)
+    return f"{header}\n{sep}\n{body}" if body else f"{header}\n{sep}"
 
 
 if __name__ == "__main__":

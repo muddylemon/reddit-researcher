@@ -118,3 +118,50 @@ def test_db_status_shows_engine_and_counts(
     assert "sqlite" in out
     assert "schema_version" in out
     assert "posts" in out
+
+
+def test_db_query_table_format(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    project_dir, run_dir = _write_project_with_run(tmp_path)
+    cli_main(["db", "sync", str(run_dir), "--project", str(project_dir)])
+    rc = cli_main(
+        ["db", "query", "SELECT post_id, subreddit FROM posts", "--project", str(project_dir)]
+    )
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "post_id" in out
+    assert "p1" in out
+    assert "AskReddit" in out
+
+
+def test_db_query_json_format(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    project_dir, run_dir = _write_project_with_run(tmp_path)
+    cli_main(["db", "sync", str(run_dir), "--project", str(project_dir)])
+    capsys.readouterr()  # drain sync output before checking query output
+    cli_main(
+        ["db", "query", "SELECT post_id FROM posts", "--project", str(project_dir), "--format", "json"]
+    )
+    out = capsys.readouterr().out
+    payload = json.loads(out)
+    assert payload == [{"post_id": "p1"}]
+
+
+def test_db_query_csv_format(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    project_dir, run_dir = _write_project_with_run(tmp_path)
+    cli_main(["db", "sync", str(run_dir), "--project", str(project_dir)])
+    capsys.readouterr()  # drain sync output before checking query output
+    cli_main(
+        ["db", "query", "SELECT post_id FROM posts", "--project", str(project_dir), "--format", "csv"]
+    )
+    out = capsys.readouterr().out
+    lines = out.strip().splitlines()
+    assert lines[0] == "post_id"
+    assert lines[1] == "p1"
+
+
+def test_db_query_rejects_writes(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    project_dir, run_dir = _write_project_with_run(tmp_path)
+    cli_main(["db", "sync", str(run_dir), "--project", str(project_dir)])
+    rc = cli_main(["db", "query", "DELETE FROM posts", "--project", str(project_dir)])
+    assert rc != 0
+    err = capsys.readouterr().err
+    assert "read" in err.lower() or "readonly" in err.lower()
