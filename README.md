@@ -308,6 +308,27 @@ reddit-researcher diff runs/AskReddit/20260507-120000 runs/AskReddit/20260508-12
 For machine-readable output, pass `--format json`. Mismatched modes/scopes
 warn to stderr but the diff still runs.
 
+### Corpus formats
+
+The text corpus passed to the LLM has three selectable shapes:
+
+- `compact` (default) — terse `[POST id] r/subreddit title: ...` markers, the historical format.
+- `conversational` — markdown headings, prose metadata, more readable.
+- `structured-json` — one JSON object per post, blank-line separated. Best when wrapping the LLM in tools.
+
+Set the format in `project.toml`:
+
+```toml
+[analyze]
+corpus_format = "conversational"
+```
+
+Or override on a single run:
+
+```bash
+reddit-researcher run my-project --corpus-format structured-json
+```
+
 ## Built-in Claude Code skills
 
 If you use [Claude Code](https://claude.com/claude-code), this repo ships with skills under

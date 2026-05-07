@@ -32,6 +32,12 @@ All notable changes to Reddit Researcher are documented here. The format follows
   from the SQLite/DuckDB sink and auto-syncs each run if missing. Text
   table by default; `--format json` for piping. Warns on mode/scope/project
   mismatch but always produces a result.
+- **Configurable corpus formatters.** New `[analyze].corpus_format` field
+  selects between `compact` (default, byte-equivalent to today's output),
+  `conversational` (markdown headings + prose metadata), and `structured-json`
+  (one JSON object per post, blank-line separated). Override per-run with
+  `--corpus-format`. The legacy `build_corpus` / `build_search_corpus` are
+  now thin wrappers around `format_corpus`.
 
 ### Changed
 

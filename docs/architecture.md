@@ -160,6 +160,16 @@ A run's `normalized/*.jsonl` files are canonical. As of 0.2.0, every run is
 - **`diff` consumer:** `reddit-researcher diff <run-a> <run-b>` reads from this
   sink, auto-syncing each run if missing or stale.
 
+## Corpus formatters
+
+`reddit_researcher/corpus_formatters.py` owns the dispatch between three named
+corpus shapes — `compact` (default, byte-equivalent to legacy output),
+`conversational` (markdown headings + prose metadata), and `structured-json`
+(one JSON object per post, blank-line separated). Selected via
+`[analyze].corpus_format` in `project.toml`, overridable per-run with
+`--corpus-format`. The legacy `build_corpus`/`build_search_corpus` in
+`prompting.py` are now thin wrappers that call `format_corpus(..., fmt="compact")`.
+
 ## Caveats and known limitations
 
 These are real friction points that have shown up in practice. They aren't bugs — most are
