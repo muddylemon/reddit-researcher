@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json as _json
+
 import pytest
 
 from reddit_researcher.corpus_formatters import VALID_CORPUS_FORMATS, format_corpus
@@ -116,3 +118,59 @@ def test_search_conversational_adds_search_term_heading() -> None:
     assert "# Search term: emacs" in out
     assert "## Post: Vim tips" in out
     assert "## Post: Emacs config" in out
+
+
+def test_subreddit_structured_json_parses_per_paragraph() -> None:
+    posts = [_post("p1", title="One"), _post("p2", title="Two")]
+    comments = [_comment("c1", "p1"), _comment("c2", "p2")]
+    out = format_corpus(mode="subreddit", fmt="structured-json", posts=posts, comments=comments)
+    paragraphs = [p for p in out.split("\n\n") if p.strip()]
+    assert len(paragraphs) == 2
+    objs = [_json.loads(p) for p in paragraphs]
+    assert objs[0]["id"] == "p1"
+    assert objs[0]["title"] == "One"
+    assert objs[0]["subreddit"] == "AskReddit"
+    assert objs[0]["author"] == "alice"
+    assert objs[0]["score"] == 42
+    assert "body" in objs[0]
+    assert "search_term" not in objs[0]  # subreddit-mode has no search_term
+    # Each post's comments are nested.
+    assert len(objs[0]["comments"]) == 1
+    assert objs[0]["comments"][0]["id"] == "c1"
+    assert objs[0]["comments"][0]["author"] == "bob"
+    assert objs[0]["comments"][0]["score"] == 3
+
+
+def test_subreddit_structured_json_post_with_no_comments_has_empty_array() -> None:
+    posts = [_post("p1")]
+    out = format_corpus(mode="subreddit", fmt="structured-json", posts=posts, comments=[])
+    obj = _json.loads(out.strip())
+    assert obj["comments"] == []
+
+
+def test_search_structured_json_includes_search_term() -> None:
+    posts = [
+        _post("p1", search_term="vim", comments=[_comment("c1", "p1")]),
+        _post("p2", search_term="emacs"),
+    ]
+    out = format_corpus(mode="search", fmt="structured-json", posts=posts)
+    paragraphs = [p for p in out.split("\n\n") if p.strip()]
+    assert len(paragraphs) == 2
+    objs = [_json.loads(p) for p in paragraphs]
+    by_id = {o["id"]: o for o in objs}
+    assert by_id["p1"]["search_term"] == "vim"
+    assert by_id["p2"]["search_term"] == "emacs"
+    assert by_id["p1"]["comments"][0]["id"] == "c1"
+
+
+def test_structured_json_escapes_newlines_in_body() -> None:
+    """Bodies with literal newlines must not break paragraph chunking."""
+    posts = [_post("p1", selftext="line one\n\nline two")]
+    out = format_corpus(mode="subreddit", fmt="structured-json", posts=posts, comments=[])
+    # The serialized body should contain backslash-n, not a literal newline.
+    assert "\\n\\n" in out or "\\n" in out
+    # The post object is one paragraph (one entry after split).
+    paragraphs = [p for p in out.split("\n\n") if p.strip()]
+    assert len(paragraphs) == 1
+    obj = _json.loads(paragraphs[0])
+    assert obj["body"] == "line one\n\nline two"  # round-trips

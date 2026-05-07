@@ -11,6 +11,8 @@ abstract than helpful.
 
 from __future__ import annotations
 
+import json
+
 VALID_CORPUS_FORMATS = {"compact", "conversational", "structured-json"}
 _VALID_MODES = {"subreddit", "search"}
 
@@ -103,7 +105,19 @@ def _subreddit_conversational(posts: list[dict], comments: list[dict]) -> str:
 
 
 def _subreddit_structured_json(posts: list[dict], comments: list[dict]) -> str:
-    raise NotImplementedError  # Filled in Task 4.
+    """Structured-JSON subreddit-mode corpus: one JSON object per post,
+    blank-line separated, comments nested under their post."""
+    comments_by_post: dict[str, list[dict]] = {}
+    for comment in comments:
+        comments_by_post.setdefault(str(comment.get("post_id", "")), []).append(comment)
+
+    blocks: list[str] = []
+    for post in posts:
+        obj = _post_to_json_dict(post)
+        obj["comments"] = [_comment_to_json_dict(c) for c in comments_by_post.get(str(post.get("id", "")), [])]
+        blocks.append(json.dumps(obj, ensure_ascii=True))
+
+    return "\n\n".join(blocks)
 
 
 def _search_compact(posts: list[dict]) -> str:
@@ -182,4 +196,36 @@ def _search_conversational(posts: list[dict]) -> str:
 
 
 def _search_structured_json(posts: list[dict]) -> str:
-    raise NotImplementedError  # Filled in Task 4.
+    """Structured-JSON search-mode corpus: same shape as subreddit-mode but
+    each post object includes `search_term` and pulls comments from
+    `post["comments"]`."""
+    sorted_posts = sorted(
+        posts, key=lambda post: (post.get("search_term") or "", -(post.get("score") or 0))
+    )
+    blocks: list[str] = []
+    for post in sorted_posts:
+        obj = _post_to_json_dict(post)
+        obj["search_term"] = post.get("search_term") or ""
+        obj["comments"] = [_comment_to_json_dict(c) for c in (post.get("comments") or [])]
+        blocks.append(json.dumps(obj, ensure_ascii=True))
+    return "\n\n".join(blocks)
+
+
+def _post_to_json_dict(post: dict) -> dict:
+    return {
+        "id": str(post.get("id", "")),
+        "subreddit": post.get("subreddit") or "unknown",
+        "title": str(post.get("title", "")),
+        "author": post.get("author") or "unknown",
+        "score": int(post.get("score", 0) or 0),
+        "body": (post.get("selftext") or "").strip(),
+    }
+
+
+def _comment_to_json_dict(comment: dict) -> dict:
+    return {
+        "id": str(comment.get("id", "")),
+        "author": comment.get("author") or "unknown",
+        "score": int(comment.get("score", 0) or 0),
+        "body": (comment.get("body") or "").strip(),
+    }
