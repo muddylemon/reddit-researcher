@@ -265,8 +265,9 @@ def _dispatch(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
 
     if args.command == "scrape":
         scrape_cfg = _scrape_config_from_args(args)
+        # args.subreddit is still a string here — Task 8 widens the CLI to nargs="+".
         run_dir = scrape_subreddit(
-            subreddit=args.subreddit,
+            subreddits=[args.subreddit],
             output_root=Path(args.output_root),
             scrape=scrape_cfg,
         )

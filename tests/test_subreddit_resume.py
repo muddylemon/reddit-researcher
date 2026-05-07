@@ -78,7 +78,7 @@ def test_subreddit_scrape_writes_versioned_manifest(monkeypatch, tmp_path: Path)
     _patch_client(monkeypatch, posts, comments)
 
     run_dir = pipeline.scrape_subreddit(
-        subreddit="testsub",
+        subreddits=["testsub"],
         output_root=tmp_path,
         scrape=ScrapeConfig(mode="subreddit", subreddits=["testsub"], post_limit=2, comment_limit=2),
     )
@@ -96,7 +96,7 @@ def test_subreddit_scrape_resumes_from_existing_run(monkeypatch, tmp_path: Path)
     _patch_client(monkeypatch, posts[:2], {pid: comments[pid] for pid in ("p1", "p2")})
 
     initial_run = pipeline.scrape_subreddit(
-        subreddit="testsub",
+        subreddits=["testsub"],
         output_root=tmp_path,
         scrape=ScrapeConfig(mode="subreddit", subreddits=["testsub"], post_limit=2, comment_limit=1),
     )
@@ -106,7 +106,7 @@ def test_subreddit_scrape_resumes_from_existing_run(monkeypatch, tmp_path: Path)
     # Second run with the full set of three posts; only p3 should be appended.
     _patch_client(monkeypatch, posts, comments)
     resumed = pipeline.scrape_subreddit(
-        subreddit="testsub",
+        subreddits=["testsub"],
         output_root=tmp_path,
         scrape=ScrapeConfig(mode="subreddit", subreddits=["testsub"], post_limit=3, comment_limit=1),
         run_dir=initial_run,
@@ -119,3 +119,22 @@ def test_subreddit_scrape_resumes_from_existing_run(monkeypatch, tmp_path: Path)
     manifest = json.loads((resumed / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["post_count"] == 3
     assert manifest["status"] == "complete"
+
+
+def test_subreddit_scrape_writes_per_subreddit_manifest_section(monkeypatch, tmp_path: Path) -> None:
+    posts = [_make_post("p1"), _make_post("p2")]
+    comments = {"p1": [_make_comment("c1", "p1")], "p2": [_make_comment("c2", "p2")]}
+    _patch_client(monkeypatch, posts, comments)
+
+    run_dir = pipeline.scrape_subreddit(
+        subreddits=["testsub"],
+        output_root=tmp_path,
+        scrape=ScrapeConfig(mode="subreddit", subreddits=["testsub"], post_limit=2, comment_limit=2),
+    )
+
+    manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["subreddits"] == ["testsub"]
+    assert manifest["subreddit"] == "testsub"  # populated only for len-1
+    assert manifest["per_subreddit"]["testsub"]["post_count"] == 2
+    assert manifest["per_subreddit"]["testsub"]["comment_count"] == 2
+    assert manifest["per_subreddit"]["testsub"]["status"] == "complete"

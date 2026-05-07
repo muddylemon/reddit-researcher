@@ -58,7 +58,7 @@ def test_run_project_subreddit_mode_dispatches(monkeypatch: pytest.MonkeyPatch, 
         output_root=tmp_path / "runs",
     )
     assert result == tmp_path / "runs" / "Programming" / "stamp"
-    assert captured["subreddit"] == "Programming"
+    assert captured["subreddits"] == ["Programming"]
     assert captured["extract_called"] is True
 
 
