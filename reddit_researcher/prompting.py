@@ -28,70 +28,21 @@ def quote_search_term(term: str) -> str:
 def build_corpus(posts: list[dict], comments: list[dict]) -> str:
     """Build a text corpus for subreddit-mode runs (posts + flat comments).
 
-    Prefixes each post header with `r/<subreddit>` so the LLM has the source
-    community on every line — matters when the run combines multiple subs.
+    Thin wrapper around `corpus_formatters.format_corpus` for backward compat.
     """
-    lines: list[str] = []
+    from .corpus_formatters import format_corpus
 
-    for post in posts:
-        subreddit = post.get("subreddit") or "unknown"
-        lines.extend(
-            [
-                f"[POST {post['id']}] r/{subreddit} title: {post['title']}",
-                f"author: {post.get('author') or 'unknown'} | score: {post.get('score', 0)} | comments: {post.get('num_comments', 0)}",
-                f"flair: {post.get('link_flair_text') or 'none'}",
-            ]
-        )
-        selftext = (post.get("selftext") or "").strip()
-        if selftext:
-            lines.append(f"body: {selftext}")
-        lines.append("")
-
-    for comment in comments:
-        lines.append(
-            f"[COMMENT {comment['id']}] post={comment['post_id']} depth={comment.get('depth', 0)} score={comment.get('score', 0)}"
-        )
-        lines.append(f"body: {(comment.get('body') or '').strip()}")
-        lines.append("")
-
-    return "\n".join(lines).strip()
+    return format_corpus(mode="subreddit", fmt="compact", posts=posts, comments=comments)
 
 
 def build_search_corpus(posts: list[dict]) -> str:
-    """Build a text corpus for search-mode runs, grouped by search term."""
-    lines: list[str] = []
-    active_term: str | None = None
+    """Build a text corpus for search-mode runs, grouped by search term.
 
-    sorted_posts = sorted(posts, key=lambda post: (post.get("search_term") or "", -(post.get("score") or 0)))
-    for post in sorted_posts:
-        search_term = post.get("search_term") or "unknown"
-        if search_term != active_term:
-            if lines:
-                lines.append("")
-            lines.append(f"## Search term: {search_term}")
-            active_term = search_term
+    Thin wrapper around `corpus_formatters.format_corpus` for backward compat.
+    """
+    from .corpus_formatters import format_corpus
 
-        subreddit = post.get("subreddit") or "unknown"
-        lines.extend(
-            [
-                f"[POST {post['id']}] r/{subreddit} title: {post['title']}",
-                f"author: {post.get('author') or 'unknown'} | score: {post.get('score', 0)} | comments: {post.get('num_comments', 0)}",
-                f"url: {post.get('url') or post.get('permalink') or 'unknown'}",
-                f"flair: {post.get('link_flair_text') or 'none'}",
-            ]
-        )
-        selftext = (post.get("selftext") or "").strip()
-        if selftext:
-            lines.append(f"body: {selftext}")
-
-        for comment in post.get("comments") or []:
-            lines.append(
-                f"[COMMENT {comment['id']}] post={comment['post_id']} depth={comment.get('depth', 0)} score={comment.get('score', 0)}"
-            )
-            lines.append(f"body: {(comment.get('body') or '').strip()}")
-        lines.append("")
-
-    return "\n".join(lines).strip()
+    return format_corpus(mode="search", fmt="compact", posts=posts)
 
 
 def chunk_text(text: str, max_chars: int) -> list[str]:
