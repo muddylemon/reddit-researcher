@@ -249,3 +249,77 @@ def test_compute_diff_no_warnings_when_runs_match(tmp_path: Path) -> None:
         assert result.warnings == []
     finally:
         sink.close()
+
+
+def test_format_text_includes_summary_and_counts(tmp_path: Path) -> None:
+    storage = StorageConfig(db_path=tmp_path / "r.db")
+    sink = make_sink(storage, project_dir=tmp_path)
+    try:
+        run_a = _make_synced_run(
+            sink, tmp_path, scope="AskReddit", ts="20260507-120000",
+            posts=[_post_row("p1"), _post_row("p2")],
+            comments=[_comment_row("c1", "p1")],
+        )
+        run_b = _make_synced_run(
+            sink, tmp_path, scope="AskReddit", ts="20260508-120000",
+            posts=[_post_row("p2"), _post_row("p3")],
+            comments=[_comment_row("c1", "p2"), _comment_row("c2", "p2")],
+        )
+        result = compute_diff(sink, run_a, run_b)
+        text = format_text(result)
+        assert "Diff: A vs B" in text
+        assert "AskReddit" in text
+        assert "posts:" in text
+        assert "only-in-A=1" in text
+        assert "only-in-B=1" in text
+        assert "in-both=1" in text
+        assert "p1" in text       # listed in only-in-A
+        assert "p3" in text       # listed in only-in-B
+    finally:
+        sink.close()
+
+
+def test_format_text_caps_long_lists(tmp_path: Path) -> None:
+    storage = StorageConfig(db_path=tmp_path / "r.db")
+    sink = make_sink(storage, project_dir=tmp_path)
+    try:
+        # 25 posts only in A — text format should cap at 20 and append "(+N more)".
+        run_a = _make_synced_run(
+            sink, tmp_path, scope="AskReddit", ts="20260507-120000",
+            posts=[_post_row(f"p{i:02d}") for i in range(25)],
+        )
+        run_b = _make_synced_run(
+            sink, tmp_path, scope="AskReddit", ts="20260508-120000",
+            posts=[],
+        )
+        result = compute_diff(sink, run_a, run_b)
+        text = format_text(result)
+        assert "(+5 more)" in text
+    finally:
+        sink.close()
+
+
+def test_format_text_includes_relevance_changes(tmp_path: Path) -> None:
+    storage = StorageConfig(db_path=tmp_path / "r.db")
+    sink = make_sink(storage, project_dir=tmp_path)
+    try:
+        run_a = _make_synced_run(
+            sink, tmp_path, scope="AskReddit", ts="20260507-120000",
+            posts=[_post_row("p1")],
+            decisions=[
+                {"post_id": "p1", "subreddit": "AskReddit", "decision": "include", "reason": "ok"},
+            ],
+        )
+        run_b = _make_synced_run(
+            sink, tmp_path, scope="AskReddit", ts="20260508-120000",
+            posts=[_post_row("p1")],
+            decisions=[
+                {"post_id": "p1", "subreddit": "AskReddit", "decision": "exclude", "reason": "rule"},
+            ],
+        )
+        result = compute_diff(sink, run_a, run_b)
+        text = format_text(result)
+        assert "relevance changes" in text.lower()
+        assert "include -> exclude" in text or "include → exclude" in text
+    finally:
+        sink.close()

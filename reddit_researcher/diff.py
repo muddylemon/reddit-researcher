@@ -128,8 +128,64 @@ def _fill_warnings(result: DiffResult) -> None:
         )
 
 
+_TEXT_LIST_CAP = 20
+
+
 def format_text(result: DiffResult) -> str:
-    return "=== Diff: A vs B ===\n(stub — populated in Task 7)\n"
+    lines: list[str] = []
+    lines.append("=== Diff: A vs B ===")
+    lines.append("")
+    lines.append(_format_summary("A", result.a))
+    lines.append(_format_summary("B", result.b))
+    lines.append("")
+    lines.append(
+        f"posts: A={result.a.post_count}, B={result.b.post_count}, "
+        f"only-in-A={len(result.posts_only_in_a)}, "
+        f"only-in-B={len(result.posts_only_in_b)}, "
+        f"in-both={len(result.posts_in_both)}"
+    )
+    lines.append(
+        f"comments: A={result.a.comment_count}, B={result.b.comment_count}, "
+        f"only-in-A={result.comments_only_in_a}, "
+        f"only-in-B={result.comments_only_in_b}, "
+        f"in-both={result.comments_in_both}"
+    )
+    lines.append(f"relevance changes (in-both posts whose decision flipped): "
+                 f"{len(result.relevance_changes)}")
+    lines.append("")
+    lines.append(f"posts only in A ({len(result.posts_only_in_a)}):")
+    lines.extend(_capped_id_block(result.posts_only_in_a))
+    lines.append("")
+    lines.append(f"posts only in B ({len(result.posts_only_in_b)}):")
+    lines.extend(_capped_id_block(result.posts_only_in_b))
+    if result.relevance_changes:
+        lines.append("")
+        lines.append("relevance changes:")
+        for change in result.relevance_changes:
+            lines.append(
+                f"  {change['post_id']:<10}  {change['a_decision']} -> {change['b_decision']}"
+            )
+    return "\n".join(lines) + "\n"
+
+
+def _format_summary(label: str, summary: RunSummary) -> str:
+    return (
+        f"{label}: {summary.run_dir}  "
+        f"({summary.mode}, {summary.scope}, {summary.scraped_at_utc})\n"
+        f"   project={summary.project_name}  "
+        f"posts={summary.post_count}  comments={summary.comment_count}"
+    )
+
+
+def _capped_id_block(ids: list[str]) -> list[str]:
+    if not ids:
+        return ["  (none)"]
+    shown = ids[:_TEXT_LIST_CAP]
+    lines = ["  " + ", ".join(shown[i:i + 8]) for i in range(0, len(shown), 8)]
+    extra = len(ids) - len(shown)
+    if extra > 0:
+        lines.append(f"  ... (+{extra} more)")
+    return lines
 
 
 def format_json(result: DiffResult) -> str:
