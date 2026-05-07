@@ -64,7 +64,11 @@ def build_parser() -> argparse.ArgumentParser:
         "scrape",
         help="Scrape a single subreddit's listing into a run folder.",
     )
-    scrape_parser.add_argument("subreddit", help="Subreddit name without the r/ prefix.")
+    scrape_parser.add_argument(
+        "subreddit",
+        nargs="+",
+        help="One or more subreddit names without the r/ prefix.",
+    )
     _add_scrape_arguments(scrape_parser)
 
     search_parser = subparsers.add_parser(
@@ -265,9 +269,8 @@ def _dispatch(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
 
     if args.command == "scrape":
         scrape_cfg = _scrape_config_from_args(args)
-        # args.subreddit is still a string here — Task 8 widens the CLI to nargs="+".
         run_dir = scrape_subreddit(
-            subreddits=[args.subreddit],
+            subreddits=list(args.subreddit),
             output_root=Path(args.output_root),
             scrape=scrape_cfg,
         )
