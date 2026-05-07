@@ -159,3 +159,37 @@ def test_compute_diff_comments_set_counts(tmp_path: Path) -> None:
         assert result.comments_in_both == 2     # c2, c3
     finally:
         sink.close()
+
+
+def test_compute_diff_relevance_changes(tmp_path: Path) -> None:
+    storage = StorageConfig(db_path=tmp_path / "r.db")
+    sink = make_sink(storage, project_dir=tmp_path)
+    try:
+        run_a = _make_synced_run(
+            sink, tmp_path, scope="AskReddit", ts="20260507-120000",
+            posts=[_post_row("p1"), _post_row("p2"), _post_row("p3")],
+            decisions=[
+                {"post_id": "p1", "subreddit": "AskReddit", "decision": "include", "reason": "ok"},
+                {"post_id": "p2", "subreddit": "AskReddit", "decision": "exclude", "reason": "off-topic"},
+                {"post_id": "p3", "subreddit": "AskReddit", "decision": "review", "reason": "ambiguous"},
+            ],
+        )
+        run_b = _make_synced_run(
+            sink, tmp_path, scope="AskReddit", ts="20260508-120000",
+            posts=[_post_row("p1"), _post_row("p2"), _post_row("p3")],
+            decisions=[
+                {"post_id": "p1", "subreddit": "AskReddit", "decision": "exclude", "reason": "rule changed"},
+                {"post_id": "p2", "subreddit": "AskReddit", "decision": "exclude", "reason": "off-topic"},
+                {"post_id": "p3", "subreddit": "AskReddit", "decision": "include", "reason": "now matches"},
+            ],
+        )
+        result = compute_diff(sink, run_a, run_b)
+        # Two flips: p1 (include→exclude), p3 (review→include). p2 unchanged.
+        changes_by_id = {c["post_id"]: c for c in result.relevance_changes}
+        assert set(changes_by_id) == {"p1", "p3"}
+        assert changes_by_id["p1"]["a_decision"] == "include"
+        assert changes_by_id["p1"]["b_decision"] == "exclude"
+        assert changes_by_id["p3"]["a_decision"] == "review"
+        assert changes_by_id["p3"]["b_decision"] == "include"
+    finally:
+        sink.close()

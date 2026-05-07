@@ -72,6 +72,7 @@ def compute_diff(sink: RunSink, run_a: Path, run_b: Path) -> DiffResult:
         result = DiffResult(a=a, b=b)
         _fill_posts(conn, a_str, b_str, result)
         _fill_comments(conn, a_str, b_str, result)
+        _fill_relevance_changes(conn, a_str, b_str, result)
         return result
     finally:
         conn.close()
@@ -99,6 +100,20 @@ def _fill_comments(conn: Any, a_str: str, b_str: str, result: DiffResult) -> Non
     result.comments_only_in_a = len(a_ids - b_ids)
     result.comments_only_in_b = len(b_ids - a_ids)
     result.comments_in_both = len(a_ids & b_ids)
+
+
+def _fill_relevance_changes(conn: Any, a_str: str, b_str: str, result: DiffResult) -> None:
+    rows = conn.execute(
+        "SELECT a.post_id, a.decision, b.decision "
+        "FROM relevance_decisions a JOIN relevance_decisions b "
+        "  ON a.post_id = b.post_id AND a.search_term = b.search_term "
+        "WHERE a.run_dir = ? AND b.run_dir = ? AND a.decision != b.decision "
+        "ORDER BY a.post_id",
+        (a_str, b_str),
+    ).fetchall()
+    result.relevance_changes = [
+        {"post_id": row[0], "a_decision": row[1], "b_decision": row[2]} for row in rows
+    ]
 
 
 def format_text(result: DiffResult) -> str:
