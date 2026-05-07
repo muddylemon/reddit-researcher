@@ -295,6 +295,19 @@ db_path = "research.duckdb"
 pip install reddit-researcher[duckdb]
 ```
 
+### Comparing runs
+
+`reddit-researcher diff <run-a> <run-b>` shows what changed between two runs
+(counts, which posts appeared/disappeared, which relevance decisions flipped).
+Both runs are auto-synced into the DB if not already present.
+
+```bash
+reddit-researcher diff runs/AskReddit/20260507-120000 runs/AskReddit/20260508-120000
+```
+
+For machine-readable output, pass `--format json`. Mismatched modes/scopes
+warn to stderr but the diff still runs.
+
 ## Built-in Claude Code skills
 
 If you use [Claude Code](https://claude.com/claude-code), this repo ships with skills under
