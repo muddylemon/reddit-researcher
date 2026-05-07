@@ -76,9 +76,9 @@ subreddit-mode runs:
 
 - `subreddits` — list of subreddit names (always present in subreddit-mode, even for a
   single-sub project).
-- `per_subreddit` — mapping of subreddit name → per-sub counters (`posts_fetched`,
-  `posts_written`, `status`, etc.). Lets callers inspect partial failures when one sub in a
-  multi-sub run errors out while others succeed.
+- `per_subreddit` — mapping of subreddit name → `{post_count, comment_count, status[, error]}`.
+  Status is one of `pending`, `fetching`, `complete`, or `fetch_error`. Lets callers inspect
+  partial failures when one sub in a multi-sub run errors out while others succeed.
 
 Posts in `normalized/posts.jsonl` carry a `subreddit` field identifying their source
 community, making it straightforward to partition or filter the corpus by sub.

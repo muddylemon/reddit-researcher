@@ -119,6 +119,12 @@ sort = "top"
 time_filter = "month"
 post_limit = 25      # per subreddit (75 total here)
 comment_limit = 10
+
+[analyze]
+model = "qwen3:8b"
+prompt_file = "prompt.md"
+chunk_char_limit = 12000
+ollama_timeout_seconds = 600
 ```
 
 `post_limit` is per-subreddit, matching search-mode's per-term semantics. The
