@@ -210,3 +210,36 @@ def test_scrape_subcommand_accepts_single_subreddit() -> None:
     parser = build_parser()
     args = parser.parse_args(["scrape", "personalfinance"])
     assert args.subreddit == ["personalfinance"]
+
+
+def test_corpus_format_cli_override_threads_to_analyze_config() -> None:
+    """--corpus-format overrides AnalyzeConfig.corpus_format via _apply_analyze_overrides."""
+    import argparse
+
+    from reddit_researcher.cli import _apply_analyze_overrides
+    from reddit_researcher.config import AnalyzeConfig
+
+    base = AnalyzeConfig()
+    args = argparse.Namespace(
+        prompt_file=None, model=None, ollama_url=None, ollama_timeout_seconds=None,
+        chunk_char_limit=None, chunk_limit=None, force_reextract=False,
+        corpus_format="conversational",
+    )
+    result = _apply_analyze_overrides(base, args)
+    assert result.corpus_format == "conversational"
+
+
+def test_corpus_format_cli_override_none_falls_back_to_base() -> None:
+    import argparse
+
+    from reddit_researcher.cli import _apply_analyze_overrides
+    from reddit_researcher.config import AnalyzeConfig
+
+    base = AnalyzeConfig(corpus_format="structured-json")
+    args = argparse.Namespace(
+        prompt_file=None, model=None, ollama_url=None, ollama_timeout_seconds=None,
+        chunk_char_limit=None, chunk_limit=None, force_reextract=False,
+        corpus_format=None,
+    )
+    result = _apply_analyze_overrides(base, args)
+    assert result.corpus_format == "structured-json"

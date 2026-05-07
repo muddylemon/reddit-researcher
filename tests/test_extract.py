@@ -285,3 +285,54 @@ def test_extract_multi_sub_uses_combined_scope_label(
 def test_extract_requires_prompt_file() -> None:
     with pytest.raises(ValueError, match="prompt_file"):
         pipeline.extract_from_run(run_dir=Path("/tmp/x"), analyze=AnalyzeConfig())
+
+
+def test_extract_from_run_uses_conversational_format(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """extract_from_run honors AnalyzeConfig.corpus_format."""
+    import json as _json
+
+    from reddit_researcher.config import AnalyzeConfig
+    from reddit_researcher.pipeline import extract_from_run
+    from reddit_researcher.storage import append_jsonl
+
+    run_dir = tmp_path / "runs" / "AskReddit" / "20260507-120000"
+    (run_dir / "normalized").mkdir(parents=True)
+    (run_dir / "review").mkdir(parents=True)
+    (run_dir / "analysis" / "chunks").mkdir(parents=True)
+    manifest = {
+        "schema_version": 2, "mode": "subreddit", "status": "complete",
+        "subreddits": ["AskReddit"], "scraped_at_utc": "2026-05-07T12:00:00+00:00",
+        "post_count": 1, "comment_count": 0,
+    }
+    (run_dir / "manifest.json").write_text(_json.dumps(manifest), encoding="utf-8")
+    append_jsonl(
+        run_dir / "normalized" / "posts.jsonl",
+        {"id": "p1", "subreddit": "AskReddit", "title": "Hello", "author": "alice",
+         "selftext": "world", "url": "u", "permalink": "/p1", "score": 1,
+         "upvote_ratio": 0.9, "num_comments": 0, "created_utc": 1.0,
+         "over_18": False, "is_self": True, "link_flair_text": None,
+         "sort": "top", "time_filter": "month"},
+    )
+    prompt_file = tmp_path / "prompt.md"
+    prompt_file.write_text("Summarize.", encoding="utf-8")
+
+    captured: dict[str, str] = {}
+
+    class _StubClient:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            pass
+
+        def generate(self, *, model: str, prompt: str) -> str:
+            if "last_prompt" not in captured:
+                captured["last_prompt"] = prompt
+            return "stub response"
+
+    monkeypatch.setattr("reddit_researcher.pipeline.OllamaClient", _StubClient)
+
+    analyze = AnalyzeConfig(
+        prompt_file=prompt_file, corpus_format="conversational", chunk_char_limit=10000,
+    )
+    extract_from_run(run_dir=run_dir, analyze=analyze)
+
+    assert "## Post: Hello" in captured["last_prompt"]
+    assert "[POST p1]" not in captured["last_prompt"]

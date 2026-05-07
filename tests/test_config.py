@@ -250,3 +250,37 @@ def test_storage_db_path_resolved_relative_to_project(tmp_path: Path) -> None:
     project = load_project(project_dir / "project.toml")
     assert project.storage.db_path == (project_dir.parent / "shared.db").resolve()
     assert project.storage.auto_sync is False
+
+
+def test_analyze_corpus_format_defaults_to_compact(tmp_path: Path) -> None:
+    project_dir = tmp_path / "demo"
+    project_dir.mkdir()
+    (project_dir / "project.toml").write_text(
+        '[scrape]\nmode = "subreddit"\nsubreddit = "x"\n', encoding="utf-8"
+    )
+    project = load_project(project_dir / "project.toml")
+    assert project.analyze.corpus_format == "compact"
+
+
+def test_analyze_corpus_format_parsed(tmp_path: Path) -> None:
+    project_dir = tmp_path / "demo"
+    project_dir.mkdir()
+    (project_dir / "project.toml").write_text(
+        '[scrape]\nmode = "subreddit"\nsubreddit = "x"\n'
+        '[analyze]\ncorpus_format = "conversational"\n',
+        encoding="utf-8",
+    )
+    project = load_project(project_dir / "project.toml")
+    assert project.analyze.corpus_format == "conversational"
+
+
+def test_analyze_corpus_format_invalid_rejected(tmp_path: Path) -> None:
+    project_dir = tmp_path / "demo"
+    project_dir.mkdir()
+    (project_dir / "project.toml").write_text(
+        '[scrape]\nmode = "subreddit"\nsubreddit = "x"\n'
+        '[analyze]\ncorpus_format = "yaml"\n',
+        encoding="utf-8",
+    )
+    with pytest.raises(ProjectConfigError, match="invalid analyze.corpus_format"):
+        load_project(project_dir / "project.toml")

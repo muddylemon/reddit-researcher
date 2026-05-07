@@ -242,6 +242,12 @@ def _add_analyze_overrides(parser: argparse.ArgumentParser, *, require_prompt: b
     parser.add_argument("--chunk-char-limit", type=int, default=None)
     parser.add_argument("--chunk-limit", type=int, default=None)
     parser.add_argument("--force-reextract", action="store_true")
+    parser.add_argument(
+        "--corpus-format",
+        default=None,
+        choices=["compact", "conversational", "structured-json"],
+        help="Override [analyze].corpus_format for this run.",
+    )
 
 
 def _scrape_config_from_args(args: argparse.Namespace) -> ScrapeConfig:
@@ -266,6 +272,7 @@ def _apply_analyze_overrides(base: AnalyzeConfig, args: argparse.Namespace) -> A
         chunk_char_limit=args.chunk_char_limit or base.chunk_char_limit,
         chunk_limit=args.chunk_limit if args.chunk_limit is not None else base.chunk_limit,
         force_reextract=base.force_reextract or bool(getattr(args, "force_reextract", False)),
+        corpus_format=getattr(args, "corpus_format", None) or base.corpus_format,
     )
 
 
