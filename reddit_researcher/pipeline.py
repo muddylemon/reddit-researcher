@@ -5,7 +5,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from .config import AnalyzeConfig, ProjectConfig, ScrapeConfig
-from .manifest import normalize_manifest, stamp as stamp_manifest
+from .db import make_sink, sync_run
+from .manifest import normalize_manifest
+from .manifest import stamp as stamp_manifest
 from .ollama_client import OllamaClient
 from .progress import RunLogger
 from .prompting import (
@@ -40,6 +42,7 @@ def scrape_subreddit(
     scrape: ScrapeConfig,
     relevance: RelevanceConfig | None = None,
     run_dir: Path | None = None,
+    project_name: str | None = None,
 ) -> Path:
     """Scrape one or more subreddits' listings into a single run dir.
 
@@ -115,6 +118,8 @@ def scrape_subreddit(
         "comment_count": all_comment_count,
         "per_subreddit": per_sub,
     }
+    if project_name is not None:
+        manifest["project_name"] = project_name
     if len(subreddits) == 1:
         manifest["subreddit"] = subreddits[0]
 
@@ -211,6 +216,7 @@ def scrape_search_terms(
     relevance: RelevanceConfig | None = None,
     start_term_index: int = 1,
     term_limit: int | None = None,
+    project_name: str | None = None,
 ) -> Path:
     """Run a per-term Reddit search and fetch matching posts and comments."""
     all_search_terms = load_terms(terms_file)
@@ -273,6 +279,9 @@ def scrape_search_terms(
         "comment_fetch_error_count": 0,
         "comment_fetch_errors": [],
     }
+
+    if project_name is not None:
+        manifest["project_name"] = project_name
 
     def checkpoint(status: str) -> None:
         manifest["status"] = status
@@ -549,6 +558,7 @@ def run_project(
             scrape=project.scrape,
             relevance=project.relevance,
             run_dir=run_dir,
+            project_name=project.name,
         )
     else:
         scrape_dir = scrape_search_terms(
@@ -560,13 +570,23 @@ def run_project(
             relevance=project.relevance,
             start_term_index=start_term_index,
             term_limit=term_limit,
+            project_name=project.name,
         )
 
-    if skip_extract:
-        return scrape_dir
+    if not skip_extract and project.analyze.prompt_file is not None:
+        extract_from_run(run_dir=scrape_dir, analyze=project.analyze)
 
-    if project.analyze.prompt_file is None:
-        return scrape_dir
+    if project.storage.auto_sync:
+        try:
+            sink = make_sink(project.storage, project_dir=project.project_dir)
+        except Exception as exc:
+            RunLogger(scrape_dir).info(f"auto_sync skipped: could not open DB: {exc}")
+        else:
+            try:
+                sync_run(sink, scrape_dir)
+            except Exception as exc:
+                RunLogger(scrape_dir).info(f"auto_sync skipped: sync failed: {exc}")
+            finally:
+                sink.close()
 
-    extract_from_run(run_dir=scrape_dir, analyze=project.analyze)
     return scrape_dir

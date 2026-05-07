@@ -135,6 +135,29 @@ line in `project.toml`.
 - The `OllamaClient` API is intentionally narrow (`generate`, `list_models`). Swapping it for a
   different local backend is a one-file change.
 
+## Storage (optional DB sink)
+
+A run's `normalized/*.jsonl` files are canonical. As of 0.2.0, every run is
+*also* mirrored into a small relational database for cross-run analysis.
+
+- **Default engine:** SQLite (stdlib, zero deps).
+- **Optional engine:** DuckDB via the `[duckdb]` extra
+  (`pip install reddit-researcher[duckdb]`). Set `[storage].engine = "duckdb"`.
+- **DB location:** `[storage].db_path` (default `research.db` next to
+  `project.toml`). Multiple projects can share one DB; `runs.project_name`
+  distinguishes them.
+- **When it's written:** post-hoc, after each `reddit-researcher run` finishes,
+  unless `[storage].auto_sync = false`. JSONL is unaffected if the sync fails;
+  the failure is logged and the run still succeeds.
+- **Tables:** `runs`, `posts`, `comments`, `relevance_decisions`. The full
+  manifest is stored verbatim in `runs.manifest_json` so queries can reach
+  fields the schema doesn't promote.
+- **Schema version:** stored in `_schema_meta`. If it diverges from the code's
+  expected version, the sink raises `SchemaVersionMismatch`; recover with
+  `reddit-researcher db sync --rebuild`.
+- **Read-only queries:** `reddit-researcher db query "SELECT ..."` opens a
+  read-only connection; writes raise an error rather than mutating data.
+
 ## Caveats and known limitations
 
 These are real friction points that have shown up in practice. They aren't bugs — most are

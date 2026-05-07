@@ -174,6 +174,33 @@ def build_parser() -> argparse.ArgumentParser:
     )
     review_parser.add_argument("run_dir", help="Path to a run directory.")
 
+    db_parser = subparsers.add_parser(
+        "db",
+        help="Query and sync the project's research DB.",
+    )
+    db_subs = db_parser.add_subparsers(dest="db_command", required=True)
+
+    db_sync_parser = db_subs.add_parser("sync", help="Sync run dirs into the DB.")
+    db_sync_parser.add_argument("run_dirs", nargs="*", help="One or more run directories.")
+    db_sync_parser.add_argument("--project", default=None, help="Path to project.toml or its directory.")
+    db_sync_parser.add_argument("--all", action="store_true", help="Sync every run under output_root.")
+    db_sync_parser.add_argument(
+        "--output-root", default=None,
+        help="Override output_root when using --all. Defaults to project's output_root or ./runs.",
+    )
+    db_sync_parser.add_argument(
+        "--rebuild", action="store_true",
+        help="Drop and recreate all tables before syncing (recovers from schema mismatch).",
+    )
+
+    db_status_parser = db_subs.add_parser("status", help="Show DB engine, path, schema, row counts.")
+    db_status_parser.add_argument("--project", default=None)
+
+    db_query_parser = db_subs.add_parser("query", help="Run a read-only SQL query against the DB.")
+    db_query_parser.add_argument("sql", help="SQL statement (read-only connection).")
+    db_query_parser.add_argument("--project", default=None)
+    db_query_parser.add_argument("--format", default="table", choices=["table", "json", "csv"])
+
     return parser
 
 
@@ -252,6 +279,9 @@ def main(argv: list[str] | None = None) -> int:
     except ProjectConfigError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
+    except SystemExit as exc:
+        # parser.error() raises SystemExit; surface its code as the return.
+        return int(exc.code) if exc.code is not None else 0
 
 
 def _dispatch(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
@@ -347,8 +377,165 @@ def _dispatch(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
         print(summarize_run(Path(args.run_dir)), end="")
         return 0
 
+    if args.command == "db":
+        return _dispatch_db(args, parser)
+
     parser.error(f"Unsupported command: {args.command}")
     return 2
+
+
+def _dispatch_db(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
+    from .db import make_sink, sync_run
+
+    project_arg = getattr(args, "project", None)
+    if project_arg is None:
+        candidate = Path.cwd() / "project.toml"
+        if not candidate.exists():
+            parser.error(
+                "db: pass --project <path> or run from a directory containing project.toml."
+            )
+        project_path = candidate
+    else:
+        project_path = find_project_config(Path(project_arg))
+    load_dotenvs_for(project_dir=project_path.parent, repo_root=REPO_ROOT)
+    project = load_project(project_path)
+
+    if args.db_command == "sync":
+        return _db_sync(args, project, make_sink, sync_run, parser)
+    if args.db_command == "status":
+        return _db_status(project, make_sink)
+    if args.db_command == "query":
+        return _db_query(args, project, make_sink)
+    parser.error(f"Unsupported db command: {args.db_command}")
+    return 2
+
+
+def _db_sync(args, project, make_sink, sync_run, parser) -> int:
+    sink = make_sink(project.storage, project_dir=project.project_dir)
+    try:
+        if args.rebuild:
+            sink.rebuild()
+        run_dirs = [Path(p) for p in (args.run_dirs or [])]
+        if args.all:
+            output_root = (
+                Path(args.output_root) if args.output_root
+                else (project.output_root or DEFAULT_OUTPUT_ROOT)
+            )
+            run_dirs.extend(_walk_run_dirs(output_root))
+        # Dedup while preserving first-seen order. Idempotent sync_run still
+        # works without this, but it keeps the printed count accurate.
+        run_dirs = list(dict.fromkeys(p.resolve() for p in run_dirs))
+        if not run_dirs:
+            parser.error(
+                "db sync: pass one or more run directories, or --all with an output_root."
+            )
+        synced = 0
+        for run_dir in run_dirs:
+            try:
+                sync_run(sink, run_dir)
+            except (FileNotFoundError, OSError) as exc:
+                parser.error(f"db sync: {exc}")
+            synced += 1
+        print(f"synced {synced} run dir(s) into {project.storage.db_path}")
+        return 0
+    finally:
+        sink.close()
+
+
+def _walk_run_dirs(output_root: Path) -> list[Path]:
+    """Return every run dir under output_root that contains a manifest.json."""
+    if not output_root.exists():
+        return []
+    found: list[Path] = []
+    for manifest_path in output_root.rglob("manifest.json"):
+        found.append(manifest_path.parent)
+    return found
+
+
+def _db_status(project, make_sink) -> int:
+    sink = make_sink(project.storage, project_dir=project.project_dir)
+    try:
+        ro = sink.read_only_connect()
+        try:
+            schema_row = ro.execute(
+                "SELECT schema_version, created_at_utc, reddit_researcher_version FROM _schema_meta"
+            ).fetchone()
+            counts = {
+                table: ro.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+                for table in ("runs", "posts", "comments", "relevance_decisions")
+            }
+            recent = ro.execute(
+                "SELECT run_dir, mode, scope, status, post_count, comment_count "
+                "FROM runs ORDER BY synced_at_utc DESC LIMIT 10"
+            ).fetchall()
+        finally:
+            ro.close()
+    finally:
+        sink.close()
+
+    print(f"engine:           {project.storage.engine}")
+    print(f"db_path:          {project.storage.db_path}")
+    if schema_row:
+        print(f"schema_version:   {schema_row[0]} (created {schema_row[1]}, rr {schema_row[2]})")
+    print("row counts:")
+    for table, n in counts.items():
+        print(f"  {table:<22} {n}")
+    if recent:
+        print("recent runs:")
+        for run_dir, mode, scope, status, posts, comments in recent:
+            print(f"  [{mode}] {scope:<24} {status:<18} {posts}p {comments}c  {run_dir}")
+    return 0
+
+
+def _db_query(args, project, make_sink) -> int:
+    import csv
+
+    sink = make_sink(project.storage, project_dir=project.project_dir)
+    try:
+        ro = sink.read_only_connect()
+        try:
+            try:
+                cursor = ro.execute(args.sql)
+            except Exception as exc:
+                # Read-only mode rejects writes; bad SQL also surfaces here.
+                print(f"error: {exc}", file=sys.stderr)
+                return 1
+            cols = [d[0] for d in cursor.description] if cursor.description else []
+            rows = cursor.fetchall()
+        finally:
+            ro.close()
+    finally:
+        sink.close()
+
+    if args.format == "json":
+        import json as _json
+
+        payload = [dict(zip(cols, row, strict=False)) for row in rows]
+        print(_json.dumps(payload, ensure_ascii=True))
+        return 0
+    if args.format == "csv":
+        writer = csv.writer(sys.stdout)
+        if cols:
+            writer.writerow(cols)
+        writer.writerows(rows)
+        return 0
+    # table
+    print(_format_table(cols, rows))
+    return 0
+
+
+def _format_table(cols: list[str], rows: list[tuple]) -> str:
+    if not cols:
+        return "(no rows)"
+    string_rows = [[("" if v is None else str(v)) for v in row] for row in rows]
+    widths = [len(c) for c in cols]
+    for row in string_rows:
+        for i, cell in enumerate(row):
+            widths[i] = max(widths[i], len(cell))
+    sep = "  ".join("-" * w for w in widths)
+    header = "  ".join(c.ljust(w) for c, w in zip(cols, widths, strict=False))
+    body = "\n".join("  ".join(cell.ljust(w) for cell, w in zip(row, widths, strict=False)) for row in string_rows)
+    return f"{header}\n{sep}\n{body}" if body else f"{header}\n{sep}"
 
 
 if __name__ == "__main__":

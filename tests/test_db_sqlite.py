@@ -1,0 +1,432 @@
+"""Tests for the SQLite RunSink and the engine-agnostic sync_run()."""
+
+# Imports below are scaffolding for tests added by Tasks 3-8 in the SQLite/DuckDB
+# sink plan. Symbols unused by current test bodies are suppressed with noqa: F401.
+from __future__ import annotations
+
+import json
+import sqlite3  # noqa: F401
+from pathlib import Path
+
+import pytest
+
+from reddit_researcher.config import StorageConfig
+from reddit_researcher.db import (
+    DuckdbNotInstalled,  # noqa: F401
+    RunSink,  # noqa: F401
+    SchemaVersionMismatch,  # noqa: F401
+    SyncResult,  # noqa: F401
+    make_sink,
+    sync_run,  # noqa: F401
+)
+from reddit_researcher.db_sqlite import SCHEMA_VERSION, SqliteRunSink  # noqa: F401
+from reddit_researcher.storage import append_jsonl
+
+
+def test_factory_returns_sqlite_sink_by_default(tmp_path: Path) -> None:
+    storage = StorageConfig(engine="sqlite", db_path=tmp_path / "research.db")
+    sink = make_sink(storage, project_dir=tmp_path)
+    try:
+        assert isinstance(sink, SqliteRunSink)
+        assert (tmp_path / "research.db").exists()
+    finally:
+        sink.close()
+
+
+def test_factory_raises_for_unknown_engine(tmp_path: Path) -> None:
+    storage = StorageConfig(engine="postgres", db_path=tmp_path / "x.db")
+    with pytest.raises(ValueError, match="unknown storage engine"):
+        make_sink(storage, project_dir=tmp_path)
+
+
+def test_sqlite_init_schema_mismatch_closes_connection(tmp_path: Path) -> None:
+    """Regression: SchemaVersionMismatch in __init__ must not leak the connection."""
+    db_path = tmp_path / "r.db"
+    storage = StorageConfig(engine="sqlite", db_path=db_path)
+
+    # Bootstrap the DB at the current schema_version.
+    sink = make_sink(storage, project_dir=tmp_path)
+    sink.close()
+
+    # Tamper with the recorded version so the next open raises.
+    raw = sqlite3.connect(db_path)
+    raw.execute("UPDATE _schema_meta SET schema_version = 99")
+    raw.commit()
+    raw.close()
+
+    with pytest.raises(SchemaVersionMismatch):
+        make_sink(storage, project_dir=tmp_path)
+
+    # If the failed init leaked its connection, the file is still locked on
+    # Windows and unlink raises PermissionError.
+    db_path.unlink()
+    assert not db_path.exists()
+
+
+def _make_run_dir(tmp_path: Path, *, scope: str = "AskReddit", mode: str = "subreddit") -> Path:
+    """Create a minimal run dir with manifest + empty JSONL files."""
+    run_dir = tmp_path / "runs" / scope / "20260507-120000"
+    (run_dir / "normalized").mkdir(parents=True)
+    (run_dir / "review").mkdir(parents=True)
+    manifest = {
+        "schema_version": 2,
+        "mode": mode,
+        "status": "complete",
+        "subreddits": [scope] if mode == "subreddit" else [],
+        "scraped_at_utc": "2026-05-07T12:00:00+00:00",
+        "post_count": 0,
+        "comment_count": 0,
+    }
+    (run_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    (run_dir / "normalized" / "posts.jsonl").write_text("", encoding="utf-8")
+    (run_dir / "normalized" / "comments.jsonl").write_text("", encoding="utf-8")
+    return run_dir
+
+
+def test_upsert_run_inserts_one_row(tmp_path: Path) -> None:
+    storage = StorageConfig(db_path=tmp_path / "r.db")
+    sink = make_sink(storage, project_dir=tmp_path)
+    try:
+        run_dir = _make_run_dir(tmp_path)
+        manifest = json.loads((run_dir / "manifest.json").read_text())
+        with sink.transaction():
+            sink.upsert_run(run_dir, manifest)
+        ro = sink.read_only_connect()
+        try:
+            row = ro.execute("SELECT mode, scope, status, post_count FROM runs").fetchone()
+        finally:
+            ro.close()
+        assert row == ("subreddit", "AskReddit", "complete", 0)
+    finally:
+        sink.close()
+
+
+def test_upsert_run_replaces_existing(tmp_path: Path) -> None:
+    storage = StorageConfig(db_path=tmp_path / "r.db")
+    sink = make_sink(storage, project_dir=tmp_path)
+    try:
+        run_dir = _make_run_dir(tmp_path)
+        m1 = json.loads((run_dir / "manifest.json").read_text())
+        m2 = dict(m1)
+        m2["status"] = "fetching_comments"
+        with sink.transaction():
+            sink.upsert_run(run_dir, m1)
+        with sink.transaction():
+            sink.upsert_run(run_dir, m2)
+        ro = sink.read_only_connect()
+        try:
+            rows = ro.execute("SELECT status FROM runs").fetchall()
+        finally:
+            ro.close()
+        assert rows == [("fetching_comments",)]
+    finally:
+        sink.close()
+
+
+def test_delete_run_removes_row(tmp_path: Path) -> None:
+    storage = StorageConfig(db_path=tmp_path / "r.db")
+    sink = make_sink(storage, project_dir=tmp_path)
+    try:
+        run_dir = _make_run_dir(tmp_path)
+        manifest = json.loads((run_dir / "manifest.json").read_text())
+        with sink.transaction():
+            sink.upsert_run(run_dir, manifest)
+            sink.delete_run(run_dir)
+        ro = sink.read_only_connect()
+        try:
+            count = ro.execute("SELECT COUNT(*) FROM runs").fetchone()[0]
+        finally:
+            ro.close()
+        assert count == 0
+    finally:
+        sink.close()
+
+
+def _post_row(post_id: str, subreddit: str, *, search_term: str | None = None) -> dict:
+    row = {
+        "id": post_id,
+        "subreddit": subreddit,
+        "title": f"Title for {post_id}",
+        "author": "alice",
+        "selftext": "body",
+        "url": f"https://reddit.com/r/{subreddit}/{post_id}",
+        "permalink": f"/r/{subreddit}/comments/{post_id}/",
+        "score": 42,
+        "upvote_ratio": 0.95,
+        "num_comments": 7,
+        "created_utc": 1700000000.0,
+        "over_18": False,
+        "is_self": True,
+        "link_flair_text": None,
+        "sort": "top",
+        "time_filter": "month",
+        "comments": [],
+    }
+    if search_term is not None:
+        row["search_term"] = search_term
+    return row
+
+
+def test_insert_posts_subreddit_mode(tmp_path: Path) -> None:
+    storage = StorageConfig(db_path=tmp_path / "r.db")
+    sink = make_sink(storage, project_dir=tmp_path)
+    try:
+        run_dir = _make_run_dir(tmp_path)
+        manifest = json.loads((run_dir / "manifest.json").read_text())
+        with sink.transaction():
+            sink.upsert_run(run_dir, manifest)
+            sink.insert_posts(run_dir, [_post_row("a1", "AskReddit"), _post_row("a2", "AskReddit")])
+        ro = sink.read_only_connect()
+        try:
+            rows = ro.execute("SELECT post_id, subreddit, search_term FROM posts ORDER BY post_id").fetchall()
+        finally:
+            ro.close()
+        assert rows == [("a1", "AskReddit", ""), ("a2", "AskReddit", "")]
+    finally:
+        sink.close()
+
+
+def test_insert_posts_search_mode_dedupes_same_post_under_different_terms(tmp_path: Path) -> None:
+    storage = StorageConfig(db_path=tmp_path / "r.db")
+    sink = make_sink(storage, project_dir=tmp_path)
+    try:
+        run_dir = _make_run_dir(tmp_path, scope="all-reddit-search", mode="search")
+        manifest = json.loads((run_dir / "manifest.json").read_text())
+        with sink.transaction():
+            sink.upsert_run(run_dir, manifest)
+            sink.insert_posts(
+                run_dir,
+                [
+                    _post_row("p1", "Tools", search_term="vim"),
+                    _post_row("p1", "Tools", search_term="emacs"),  # same post_id, different term
+                ],
+            )
+        ro = sink.read_only_connect()
+        try:
+            rows = ro.execute("SELECT post_id, search_term FROM posts ORDER BY search_term").fetchall()
+        finally:
+            ro.close()
+        assert rows == [("p1", "emacs"), ("p1", "vim")]
+    finally:
+        sink.close()
+
+
+def _comment_row(comment_id: str, post_id: str) -> dict:
+    return {
+        "id": comment_id,
+        "post_id": post_id,
+        "parent_id": f"t3_{post_id}",
+        "author": "bob",
+        "body": "interesting",
+        "score": 3,
+        "created_utc": 1700000100.0,
+        "permalink": f"/r/x/comments/{post_id}/_/{comment_id}/",
+        "depth": 0,
+    }
+
+
+def test_insert_comments_round_trips(tmp_path: Path) -> None:
+    storage = StorageConfig(db_path=tmp_path / "r.db")
+    sink = make_sink(storage, project_dir=tmp_path)
+    try:
+        run_dir = _make_run_dir(tmp_path)
+        manifest = json.loads((run_dir / "manifest.json").read_text())
+        with sink.transaction():
+            sink.upsert_run(run_dir, manifest)
+            sink.insert_comments(
+                run_dir,
+                [_comment_row("c1", "a1"), _comment_row("c2", "a1")],
+            )
+        ro = sink.read_only_connect()
+        try:
+            rows = ro.execute(
+                "SELECT comment_id, post_id, body, score FROM comments ORDER BY comment_id"
+            ).fetchall()
+        finally:
+            ro.close()
+        assert rows == [("c1", "a1", "interesting", 3), ("c2", "a1", "interesting", 3)]
+    finally:
+        sink.close()
+
+
+def test_insert_relevance_round_trips(tmp_path: Path) -> None:
+    storage = StorageConfig(db_path=tmp_path / "r.db")
+    sink = make_sink(storage, project_dir=tmp_path)
+    try:
+        run_dir = _make_run_dir(tmp_path)
+        manifest = json.loads((run_dir / "manifest.json").read_text())
+        decisions = [
+            {"post_id": "p1", "subreddit": "AskReddit", "decision": "include", "reason": "matches keyword"},
+            {"post_id": "p2", "subreddit": "AskReddit", "decision": "exclude", "reason": "no match"},
+        ]
+        with sink.transaction():
+            sink.upsert_run(run_dir, manifest)
+            sink.insert_relevance(run_dir, decisions)
+        ro = sink.read_only_connect()
+        try:
+            rows = ro.execute(
+                "SELECT post_id, decision, reason FROM relevance_decisions ORDER BY post_id"
+            ).fetchall()
+        finally:
+            ro.close()
+        assert rows == [("p1", "include", "matches keyword"), ("p2", "exclude", "no match")]
+    finally:
+        sink.close()
+
+
+def _write_full_run(tmp_path: Path, *, scope: str = "AskReddit") -> Path:
+    """Create a run dir with one post, two comments, and two relevance decisions."""
+    run_dir = _make_run_dir(tmp_path, scope=scope)
+    posts_path = run_dir / "normalized" / "posts.jsonl"
+    comments_path = run_dir / "normalized" / "comments.jsonl"
+    review_path = run_dir / "review" / "relevance_review.jsonl"
+    review_path.parent.mkdir(parents=True, exist_ok=True)
+    append_jsonl(posts_path, _post_row("p1", scope))
+    append_jsonl(comments_path, _comment_row("c1", "p1"))
+    append_jsonl(comments_path, _comment_row("c2", "p1"))
+    append_jsonl(
+        review_path,
+        {"post_id": "p1", "subreddit": scope, "decision": "include", "reason": "ok"},
+    )
+    append_jsonl(
+        review_path,
+        {"post_id": "px", "subreddit": scope, "decision": "exclude", "reason": "off-topic"},
+    )
+    return run_dir
+
+
+def test_sync_run_round_trip(tmp_path: Path) -> None:
+    storage = StorageConfig(db_path=tmp_path / "r.db")
+    sink = make_sink(storage, project_dir=tmp_path)
+    try:
+        run_dir = _write_full_run(tmp_path)
+        result = sync_run(sink, run_dir)
+        assert result.posts == 1
+        assert result.comments == 2
+        assert result.relevance == 2
+        ro = sink.read_only_connect()
+        try:
+            assert ro.execute("SELECT COUNT(*) FROM runs").fetchone()[0] == 1
+            assert ro.execute("SELECT COUNT(*) FROM posts").fetchone()[0] == 1
+            assert ro.execute("SELECT COUNT(*) FROM comments").fetchone()[0] == 2
+            assert ro.execute("SELECT COUNT(*) FROM relevance_decisions").fetchone()[0] == 2
+        finally:
+            ro.close()
+    finally:
+        sink.close()
+
+
+def test_sync_run_idempotent(tmp_path: Path) -> None:
+    storage = StorageConfig(db_path=tmp_path / "r.db")
+    sink = make_sink(storage, project_dir=tmp_path)
+    try:
+        run_dir = _write_full_run(tmp_path)
+        sync_run(sink, run_dir)
+        sync_run(sink, run_dir)
+        ro = sink.read_only_connect()
+        try:
+            assert ro.execute("SELECT COUNT(*) FROM posts").fetchone()[0] == 1
+            assert ro.execute("SELECT COUNT(*) FROM comments").fetchone()[0] == 2
+        finally:
+            ro.close()
+    finally:
+        sink.close()
+
+
+def test_sync_run_reflects_jsonl_changes(tmp_path: Path) -> None:
+    storage = StorageConfig(db_path=tmp_path / "r.db")
+    sink = make_sink(storage, project_dir=tmp_path)
+    try:
+        run_dir = _write_full_run(tmp_path)
+        sync_run(sink, run_dir)
+        # Add another comment to the JSONL on disk.
+        append_jsonl(run_dir / "normalized" / "comments.jsonl", _comment_row("c3", "p1"))
+        sync_run(sink, run_dir)
+        ro = sink.read_only_connect()
+        try:
+            assert ro.execute("SELECT COUNT(*) FROM comments").fetchone()[0] == 3
+        finally:
+            ro.close()
+    finally:
+        sink.close()
+
+
+def test_delete_run_cascades_to_children(tmp_path: Path) -> None:
+    storage = StorageConfig(db_path=tmp_path / "r.db")
+    sink = make_sink(storage, project_dir=tmp_path)
+    try:
+        run_dir = _write_full_run(tmp_path)
+        sync_run(sink, run_dir)
+        with sink.transaction():
+            sink.delete_run(run_dir)
+        ro = sink.read_only_connect()
+        try:
+            assert ro.execute("SELECT COUNT(*) FROM runs").fetchone()[0] == 0
+            assert ro.execute("SELECT COUNT(*) FROM posts").fetchone()[0] == 0
+            assert ro.execute("SELECT COUNT(*) FROM comments").fetchone()[0] == 0
+            assert ro.execute("SELECT COUNT(*) FROM relevance_decisions").fetchone()[0] == 0
+        finally:
+            ro.close()
+    finally:
+        sink.close()
+
+
+def test_sync_run_missing_manifest_raises(tmp_path: Path) -> None:
+    storage = StorageConfig(db_path=tmp_path / "r.db")
+    sink = make_sink(storage, project_dir=tmp_path)
+    try:
+        run_dir = tmp_path / "runs" / "empty" / "20260507-120000"
+        run_dir.mkdir(parents=True)
+        with pytest.raises(FileNotFoundError, match="no manifest.json"):
+            sync_run(sink, run_dir)
+    finally:
+        sink.close()
+
+
+def test_schema_version_mismatch_raises(tmp_path: Path) -> None:
+    db_path = tmp_path / "r.db"
+    storage = StorageConfig(db_path=db_path)
+    # Open once to set up schema, then close.
+    make_sink(storage, project_dir=tmp_path).close()
+    # Tamper with the recorded version.
+    conn = sqlite3.connect(db_path)
+    conn.execute("UPDATE _schema_meta SET schema_version = 99")
+    conn.commit()
+    conn.close()
+    with pytest.raises(SchemaVersionMismatch):
+        make_sink(storage, project_dir=tmp_path)
+
+
+def test_rebuild_drops_and_recreates(tmp_path: Path) -> None:
+    storage = StorageConfig(db_path=tmp_path / "r.db")
+    sink = make_sink(storage, project_dir=tmp_path)
+    try:
+        run_dir = _write_full_run(tmp_path)
+        sync_run(sink, run_dir)
+        ro = sink.read_only_connect()
+        try:
+            assert ro.execute("SELECT COUNT(*) FROM posts").fetchone()[0] == 1
+        finally:
+            ro.close()
+        sink.rebuild()
+        ro = sink.read_only_connect()
+        try:
+            # Tables exist but are empty.
+            assert ro.execute("SELECT COUNT(*) FROM posts").fetchone()[0] == 0
+            assert ro.execute("SELECT schema_version FROM _schema_meta").fetchone()[0] == SCHEMA_VERSION
+        finally:
+            ro.close()
+    finally:
+        sink.close()
+
+
+def test_make_sink_duckdb_not_installed(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """If `duckdb` import fails, make_sink raises DuckdbNotInstalled with install hint."""
+    import sys as _sys
+
+    # Force a fresh import of db_duckdb so its top-level `import duckdb` re-runs.
+    monkeypatch.delitem(_sys.modules, "reddit_researcher.db_duckdb", raising=False)
+    monkeypatch.setitem(_sys.modules, "duckdb", None)  # poisons future import duckdb
+    storage = StorageConfig(engine="duckdb", db_path=tmp_path / "r.duckdb")
+    with pytest.raises(DuckdbNotInstalled, match=r"pip install reddit-researcher\[duckdb\]"):
+        make_sink(storage, project_dir=tmp_path)

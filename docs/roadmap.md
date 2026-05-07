@@ -28,7 +28,7 @@ Goal: a version that's safe to pin and recommend without caveats.
 
 Goal: make multi-run analysis tractable.
 
-- [ ] Optional SQLite/DuckDB sink writing each run's normalized rows into a queryable database.
+- [x] Optional SQLite/DuckDB sink writing each run's normalized rows into a queryable database. *(0.2.0)*
 - [ ] `reddit-researcher diff <run-a> <run-b>` to compare two runs of the same project.
 - [ ] Time-series mode: re-run a project on a schedule and aggregate results across timestamps.
 - [ ] Configurable corpus formatters (compact, conversational, structured-JSON-for-tools).

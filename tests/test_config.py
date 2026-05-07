@@ -2,7 +2,11 @@ from pathlib import Path
 
 import pytest
 
-from reddit_researcher.config import find_project_config, load_project
+from reddit_researcher.config import (
+    ProjectConfigError,
+    find_project_config,
+    load_project,
+)
 
 
 def _write_project(dir_path: Path, body: str) -> Path:
@@ -199,3 +203,50 @@ def test_subreddits_invalid_entry_rejected(tmp_path: Path) -> None:
     )
     with pytest.raises(ValueError, match="invalid subreddit name"):
         load_project(config_path)
+
+
+def test_storage_defaults_when_section_omitted(tmp_path: Path) -> None:
+    project_dir = tmp_path / "demo"
+    project_dir.mkdir()
+    (project_dir / "project.toml").write_text(
+        '[scrape]\nmode = "subreddit"\nsubreddit = "x"\n', encoding="utf-8"
+    )
+    project = load_project(project_dir / "project.toml")
+    assert project.storage.engine == "sqlite"
+    assert project.storage.db_path == (project_dir / "research.db").resolve()
+    assert project.storage.auto_sync is True
+
+
+def test_storage_engine_validated(tmp_path: Path) -> None:
+    project_dir = tmp_path / "demo"
+    project_dir.mkdir()
+    (project_dir / "project.toml").write_text(
+        '[scrape]\nmode = "subreddit"\nsubreddit = "x"\n[storage]\nengine = "postgres"\n',
+        encoding="utf-8",
+    )
+    with pytest.raises(ProjectConfigError, match="invalid storage.engine"):
+        load_project(project_dir / "project.toml")
+
+
+def test_storage_db_path_empty_string_rejected(tmp_path: Path) -> None:
+    project_dir = tmp_path / "demo"
+    project_dir.mkdir()
+    (project_dir / "project.toml").write_text(
+        '[scrape]\nmode = "subreddit"\nsubreddit = "x"\n[storage]\ndb_path = ""\n',
+        encoding="utf-8",
+    )
+    with pytest.raises(ProjectConfigError, match="storage.db_path must not be empty"):
+        load_project(project_dir / "project.toml")
+
+
+def test_storage_db_path_resolved_relative_to_project(tmp_path: Path) -> None:
+    project_dir = tmp_path / "demo"
+    project_dir.mkdir()
+    (project_dir / "project.toml").write_text(
+        '[scrape]\nmode = "subreddit"\nsubreddit = "x"\n'
+        '[storage]\ndb_path = "../shared.db"\nauto_sync = false\n',
+        encoding="utf-8",
+    )
+    project = load_project(project_dir / "project.toml")
+    assert project.storage.db_path == (project_dir.parent / "shared.db").resolve()
+    assert project.storage.auto_sync is False

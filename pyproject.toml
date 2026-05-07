@@ -45,6 +45,12 @@ dev = [
 praw = [
     "praw>=7.7.0,<8.0.0",
 ]
+# Queryable run database via DuckDB. SQLite (stdlib) is the default sink; this
+# extra unlocks `[storage].engine = "duckdb"`. Opt-in:
+#     pip install -e ".[duckdb]"
+duckdb = [
+    "duckdb>=0.10,<2.0",
+]
 
 [project.scripts]
 reddit-researcher = "reddit_researcher.cli:main"

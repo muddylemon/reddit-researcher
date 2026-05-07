@@ -11,6 +11,7 @@ VALID_MODES = {"subreddit", "search"}
 VALID_SORTS = {"hot", "new", "top", "rising"}
 VALID_TIME_FILTERS = {"hour", "day", "week", "month", "year", "all"}
 VALID_BACKENDS = {"json", "praw"}
+VALID_DB_ENGINES = {"sqlite", "duckdb"}
 
 # Environment variable names that override built-in defaults. CLI flags and
 # project.toml values still win over these. Documented in docs/architecture.md.
@@ -69,6 +70,19 @@ class AnalyzeConfig:
 
 
 @dataclass
+class StorageConfig:
+    """Database sink configuration.
+
+    `db_path` is resolved against the project dir during `load_project`. When
+    constructing this dataclass directly (e.g., in tests), pass an absolute path.
+    """
+
+    engine: str = "sqlite"
+    db_path: Path = field(default_factory=lambda: Path("research.db"))
+    auto_sync: bool = True
+
+
+@dataclass
 class ProjectConfig:
     name: str
     description: str
@@ -76,6 +90,7 @@ class ProjectConfig:
     scrape: ScrapeConfig = field(default_factory=ScrapeConfig)
     analyze: AnalyzeConfig = field(default_factory=AnalyzeConfig)
     relevance: RelevanceConfig = field(default_factory=RelevanceConfig)
+    storage: StorageConfig = field(default_factory=StorageConfig)
     output_root: Path | None = None
 
 
@@ -256,6 +271,26 @@ def load_project(config_path: Path) -> ProjectConfig:
         require_exact_term_match=bool(relevance_raw.get("require_exact_term_match", True)),
     )
 
+    storage_raw = raw.get("storage", {})
+    storage_engine = storage_raw.get("engine", "sqlite")
+    if storage_engine not in VALID_DB_ENGINES:
+        raise ProjectConfigError(
+            f"invalid storage.engine: {storage_engine!r}. Must be one of {sorted(VALID_DB_ENGINES)}.",
+            path=config_path,
+        )
+    storage_db_path_raw = storage_raw.get("db_path", "research.db")
+    storage_db_path = _resolve_path(storage_db_path_raw, base_dir)
+    if storage_db_path is None:
+        raise ProjectConfigError(
+            "storage.db_path must not be empty.",
+            path=config_path,
+        )
+    storage = StorageConfig(
+        engine=storage_engine,
+        db_path=storage_db_path,
+        auto_sync=bool(storage_raw.get("auto_sync", True)),
+    )
+
     output_root = _resolve_path(raw.get("output_root"), base_dir)
 
     return ProjectConfig(
@@ -265,6 +300,7 @@ def load_project(config_path: Path) -> ProjectConfig:
         scrape=scrape,
         analyze=analyze,
         relevance=relevance,
+        storage=storage,
         output_root=output_root,
     )
 
