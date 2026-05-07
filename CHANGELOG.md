@@ -16,6 +16,16 @@ All notable changes to Reddit Researcher are documented here. The format follows
   and status). Old (v1) manifests read forward via `normalize_manifest` —
   no rewriting needed.
 - `multi_subreddit_scope` helper for run-dir naming with multiple subs.
+- **Run database sink.** Each run's normalized rows are mirrored into a
+  small relational DB for cross-run analysis. SQLite (stdlib) is the default;
+  DuckDB is opt-in via `pip install reddit-researcher[duckdb]` plus
+  `[storage].engine = "duckdb"`. New `[storage]` config block (`engine`,
+  `db_path`, `auto_sync`). Tables: `runs`, `posts`, `comments`,
+  `relevance_decisions`, plus `_schema_meta`. JSONL on disk remains canonical.
+- **`db` CLI subcommand group.**
+  - `db sync [<run-dir>...] [--all] [--rebuild]` — sync one or many run dirs.
+  - `db status` — print engine, DB path, schema version, row counts, recent runs.
+  - `db query "<SQL>"` — run a read-only query; output as table, JSON, or CSV.
 
 ### Changed
 

@@ -265,6 +265,36 @@ runs/<scope>/<timestamp>/
     final.md                       synthesized final report
 ```
 
+### Querying across runs
+
+Every run is mirrored into a small SQLite database (default: `research.db`
+next to your `project.toml`) so you can ask questions across runs without
+re-parsing JSONL.
+
+```bash
+# How many posts per subreddit, summed across every run?
+reddit-researcher db query \
+  "SELECT subreddit, COUNT(*) FROM posts GROUP BY subreddit ORDER BY 2 DESC"
+
+# Posts that appeared under multiple search terms in the same run
+reddit-researcher db query \
+  "SELECT post_id, GROUP_CONCAT(search_term) FROM posts
+   WHERE search_term <> '' GROUP BY post_id HAVING COUNT(*) > 1"
+```
+
+To switch to DuckDB:
+
+```toml
+# project.toml
+[storage]
+engine = "duckdb"
+db_path = "research.duckdb"
+```
+
+```bash
+pip install reddit-researcher[duckdb]
+```
+
 ## Built-in Claude Code skills
 
 If you use [Claude Code](https://claude.com/claude-code), this repo ships with skills under
