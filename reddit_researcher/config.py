@@ -103,6 +103,24 @@ class ProjectConfigError(ValueError):
         self.detail = message
 
 
+def _is_valid_subreddit_name(value: object) -> bool:
+    """Return True if value looks like a usable subreddit name.
+
+    Reddit allows alphanumerics + underscore; we additionally reject empty
+    strings, whitespace, and slashes (which would break URL paths and run-dir
+    naming).
+    """
+    if not isinstance(value, str):
+        return False
+    if not value.strip():
+        return False
+    if "/" in value:
+        return False
+    if any(ch.isspace() for ch in value):
+        return False
+    return True
+
+
 def load_project(config_path: Path) -> ProjectConfig:
     """Load a project.toml file from disk and validate it."""
     if not config_path.exists():
@@ -163,7 +181,7 @@ def load_project(config_path: Path) -> ProjectConfig:
             )
         seen_lower: set[str] = set()
         for item in raw_plural:
-            if not isinstance(item, str) or not item.strip() or "/" in item or any(ch.isspace() for ch in item):
+            if not _is_valid_subreddit_name(item):
                 raise ProjectConfigError(
                     f"invalid subreddit name in scrape.subreddits: {item!r}",
                     path=config_path,
@@ -174,7 +192,7 @@ def load_project(config_path: Path) -> ProjectConfig:
             seen_lower.add(lowered)
             subreddits_list.append(item)
     elif raw_singular is not None:
-        if not isinstance(raw_singular, str) or not raw_singular.strip() or "/" in raw_singular or any(ch.isspace() for ch in raw_singular):
+        if not _is_valid_subreddit_name(raw_singular):
             raise ProjectConfigError(
                 f"invalid subreddit name in scrape.subreddit: {raw_singular!r}",
                 path=config_path,

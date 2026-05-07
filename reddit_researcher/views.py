@@ -137,7 +137,7 @@ def summarize_run(run_dir: Path) -> str:
             scope += f", {len(subs)} subs"
         scope += ")"
     else:
-        subs = manifest.get("subreddits") or ([manifest["subreddit"]] if manifest.get("subreddit") else [])
+        subs = manifest.get("subreddits") or []
         if not subs:
             scope = "r/?"
         elif len(subs) == 1:
