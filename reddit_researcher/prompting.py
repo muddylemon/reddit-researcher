@@ -26,13 +26,18 @@ def quote_search_term(term: str) -> str:
 
 
 def build_corpus(posts: list[dict], comments: list[dict]) -> str:
-    """Build a text corpus for subreddit-mode runs (posts + flat comments)."""
+    """Build a text corpus for subreddit-mode runs (posts + flat comments).
+
+    Prefixes each post header with `r/<subreddit>` so the LLM has the source
+    community on every line — matters when the run combines multiple subs.
+    """
     lines: list[str] = []
 
     for post in posts:
+        subreddit = post.get("subreddit") or "unknown"
         lines.extend(
             [
-                f"[POST {post['id']}] title: {post['title']}",
+                f"[POST {post['id']}] r/{subreddit} title: {post['title']}",
                 f"author: {post.get('author') or 'unknown'} | score: {post.get('score', 0)} | comments: {post.get('num_comments', 0)}",
                 f"flair: {post.get('link_flair_text') or 'none'}",
             ]

@@ -24,6 +24,7 @@ def test_build_corpus_includes_posts_and_comments() -> None:
         posts=[
             {
                 "id": "post1",
+                "subreddit": "Supplements",
                 "title": "Question about magnesium",
                 "author": "alice",
                 "score": 12,
@@ -42,8 +43,17 @@ def test_build_corpus_includes_posts_and_comments() -> None:
             }
         ],
     )
-    assert "[POST post1]" in corpus
+    assert "[POST post1] r/Supplements" in corpus
     assert "[COMMENT comment1]" in corpus
+
+
+def test_build_corpus_handles_posts_without_subreddit() -> None:
+    corpus = build_corpus(
+        posts=[{"id": "p", "title": "t", "author": "a", "score": 0, "num_comments": 0}],
+        comments=[],
+    )
+    # Missing subreddit falls back to "unknown" (mirrors build_search_corpus behavior).
+    assert "[POST p] r/unknown" in corpus
 
 
 def test_prompt_builders_embed_key_context() -> None:
