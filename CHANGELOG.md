@@ -26,6 +26,12 @@ All notable changes to Reddit Researcher are documented here. The format follows
   - `db sync [<run-dir>...] [--all] [--rebuild]` — sync one or many run dirs.
   - `db status` — print engine, DB path, schema version, row counts, recent runs.
   - `db query "<SQL>"` — run a read-only query; output as table, JSON, or CSV.
+- **`reddit-researcher diff <run-a> <run-b>`.** Compare two runs of (typically)
+  the same project: counts diff, post_id set membership (only-in-A,
+  only-in-B, in-both), comment counts, and relevance-decision flips. Reads
+  from the SQLite/DuckDB sink and auto-syncs each run if missing. Text
+  table by default; `--format json` for piping. Warns on mode/scope/project
+  mismatch but always produces a result.
 
 ### Changed
 

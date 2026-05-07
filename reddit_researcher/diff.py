@@ -1,0 +1,192 @@
+"""Compute and format a diff between two run dirs.
+
+Reads from the SQLite/DuckDB sink. The CLI handler is responsible for
+ensuring both runs are synced before calling `compute_diff`.
+
+JSONL on disk remains canonical; `compute_diff` is a pure read.
+"""
+
+from __future__ import annotations
+
+import json
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
+from typing import Any
+
+from .db import RunSink
+
+
+@dataclass
+class RunSummary:
+    run_dir: Path
+    mode: str
+    scope: str
+    project_name: str | None
+    scraped_at_utc: str
+    post_count: int
+    comment_count: int
+
+
+@dataclass
+class DiffResult:
+    a: RunSummary
+    b: RunSummary
+    posts_only_in_a: list[str] = field(default_factory=list)
+    posts_only_in_b: list[str] = field(default_factory=list)
+    posts_in_both: list[str] = field(default_factory=list)
+    comments_only_in_a: int = 0
+    comments_only_in_b: int = 0
+    comments_in_both: int = 0
+    relevance_changes: list[dict[str, Any]] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+
+
+def _summary_for(conn: Any, run_dir: Path) -> RunSummary:
+    """Read the runs row for one run dir into a RunSummary."""
+    row = conn.execute(
+        "SELECT mode, scope, project_name, scraped_at_utc, post_count, comment_count "
+        "FROM runs WHERE run_dir = ?",
+        (str(run_dir.resolve()),),
+    ).fetchone()
+    if row is None:
+        raise LookupError(f"run_dir not in sink: {run_dir}")
+    return RunSummary(
+        run_dir=run_dir.resolve(),
+        mode=row[0],
+        scope=row[1],
+        project_name=row[2],
+        scraped_at_utc=row[3],
+        post_count=int(row[4]),
+        comment_count=int(row[5]),
+    )
+
+
+def compute_diff(sink: RunSink, run_a: Path, run_b: Path) -> DiffResult:
+    """Compute the structured diff between two synced runs."""
+    a_str = str(run_a.resolve())
+    b_str = str(run_b.resolve())
+    conn = sink.read_only_connect()
+    try:
+        a = _summary_for(conn, run_a)
+        b = _summary_for(conn, run_b)
+        result = DiffResult(a=a, b=b)
+        _fill_posts(conn, a_str, b_str, result)
+        _fill_comments(conn, a_str, b_str, result)
+        _fill_relevance_changes(conn, a_str, b_str, result)
+        _fill_warnings(result)
+        return result
+    finally:
+        conn.close()
+
+
+def _fill_posts(conn: Any, a_str: str, b_str: str, result: DiffResult) -> None:
+    a_ids = {row[0] for row in conn.execute(
+        "SELECT post_id FROM posts WHERE run_dir = ?", (a_str,)
+    ).fetchall()}
+    b_ids = {row[0] for row in conn.execute(
+        "SELECT post_id FROM posts WHERE run_dir = ?", (b_str,)
+    ).fetchall()}
+    result.posts_only_in_a = sorted(a_ids - b_ids)
+    result.posts_only_in_b = sorted(b_ids - a_ids)
+    result.posts_in_both = sorted(a_ids & b_ids)
+
+
+def _fill_comments(conn: Any, a_str: str, b_str: str, result: DiffResult) -> None:
+    a_ids = {row[0] for row in conn.execute(
+        "SELECT comment_id FROM comments WHERE run_dir = ?", (a_str,)
+    ).fetchall()}
+    b_ids = {row[0] for row in conn.execute(
+        "SELECT comment_id FROM comments WHERE run_dir = ?", (b_str,)
+    ).fetchall()}
+    result.comments_only_in_a = len(a_ids - b_ids)
+    result.comments_only_in_b = len(b_ids - a_ids)
+    result.comments_in_both = len(a_ids & b_ids)
+
+
+def _fill_relevance_changes(conn: Any, a_str: str, b_str: str, result: DiffResult) -> None:
+    rows = conn.execute(
+        "SELECT a.post_id, a.decision, b.decision "
+        "FROM relevance_decisions a JOIN relevance_decisions b "
+        "  ON a.post_id = b.post_id AND a.search_term = b.search_term "
+        "WHERE a.run_dir = ? AND b.run_dir = ? AND a.decision != b.decision "
+        "ORDER BY a.post_id",
+        (a_str, b_str),
+    ).fetchall()
+    result.relevance_changes = [
+        {"post_id": row[0], "a_decision": row[1], "b_decision": row[2]} for row in rows
+    ]
+
+
+def _fill_warnings(result: DiffResult) -> None:
+    if result.a.mode != result.b.mode:
+        result.warnings.append(f"mode mismatch: A={result.a.mode}, B={result.b.mode}")
+    if result.a.scope != result.b.scope:
+        result.warnings.append(f"scope mismatch: A={result.a.scope}, B={result.b.scope}")
+    if result.a.project_name != result.b.project_name:
+        result.warnings.append(
+            f"project mismatch: A={result.a.project_name}, B={result.b.project_name}"
+        )
+
+
+_TEXT_LIST_CAP = 20
+
+
+def format_text(result: DiffResult) -> str:
+    lines: list[str] = []
+    lines.append("=== Diff: A vs B ===")
+    lines.append("")
+    lines.append(_format_summary("A", result.a))
+    lines.append(_format_summary("B", result.b))
+    lines.append("")
+    lines.append(
+        f"posts: A={result.a.post_count}, B={result.b.post_count}, "
+        f"only-in-A={len(result.posts_only_in_a)}, "
+        f"only-in-B={len(result.posts_only_in_b)}, "
+        f"in-both={len(result.posts_in_both)}"
+    )
+    lines.append(
+        f"comments: A={result.a.comment_count}, B={result.b.comment_count}, "
+        f"only-in-A={result.comments_only_in_a}, "
+        f"only-in-B={result.comments_only_in_b}, "
+        f"in-both={result.comments_in_both}"
+    )
+    lines.append(f"relevance changes (in-both posts whose decision flipped): "
+                 f"{len(result.relevance_changes)}")
+    lines.append("")
+    lines.append(f"posts only in A ({len(result.posts_only_in_a)}):")
+    lines.extend(_capped_id_block(result.posts_only_in_a))
+    lines.append("")
+    lines.append(f"posts only in B ({len(result.posts_only_in_b)}):")
+    lines.extend(_capped_id_block(result.posts_only_in_b))
+    if result.relevance_changes:
+        lines.append("")
+        lines.append("relevance changes:")
+        for change in result.relevance_changes:
+            lines.append(
+                f"  {change['post_id']:<10}  {change['a_decision']} -> {change['b_decision']}"
+            )
+    return "\n".join(lines) + "\n"
+
+
+def _format_summary(label: str, summary: RunSummary) -> str:
+    return (
+        f"{label}: {summary.run_dir}  "
+        f"({summary.mode}, {summary.scope}, {summary.scraped_at_utc})\n"
+        f"   project={summary.project_name}  "
+        f"posts={summary.post_count}  comments={summary.comment_count}"
+    )
+
+
+def _capped_id_block(ids: list[str]) -> list[str]:
+    if not ids:
+        return ["  (none)"]
+    shown = ids[:_TEXT_LIST_CAP]
+    lines = ["  " + ", ".join(shown[i:i + 8]) for i in range(0, len(shown), 8)]
+    extra = len(ids) - len(shown)
+    if extra > 0:
+        lines.append(f"  ... (+{extra} more)")
+    return lines
+
+
+def format_json(result: DiffResult) -> str:
+    return json.dumps(asdict(result), default=str, ensure_ascii=True)

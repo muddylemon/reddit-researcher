@@ -157,6 +157,8 @@ A run's `normalized/*.jsonl` files are canonical. As of 0.2.0, every run is
   `reddit-researcher db sync --rebuild`.
 - **Read-only queries:** `reddit-researcher db query "SELECT ..."` opens a
   read-only connection; writes raise an error rather than mutating data.
+- **`diff` consumer:** `reddit-researcher diff <run-a> <run-b>` reads from this
+  sink, auto-syncing each run if missing or stale.
 
 ## Caveats and known limitations
 
