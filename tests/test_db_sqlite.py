@@ -139,3 +139,72 @@ def test_delete_run_removes_row(tmp_path: Path) -> None:
         assert count == 0
     finally:
         sink.close()
+
+
+def _post_row(post_id: str, subreddit: str, *, search_term: str | None = None) -> dict:
+    row = {
+        "id": post_id,
+        "subreddit": subreddit,
+        "title": f"Title for {post_id}",
+        "author": "alice",
+        "selftext": "body",
+        "url": f"https://reddit.com/r/{subreddit}/{post_id}",
+        "permalink": f"/r/{subreddit}/comments/{post_id}/",
+        "score": 42,
+        "upvote_ratio": 0.95,
+        "num_comments": 7,
+        "created_utc": 1700000000.0,
+        "over_18": False,
+        "is_self": True,
+        "link_flair_text": None,
+        "sort": "top",
+        "time_filter": "month",
+        "comments": [],
+    }
+    if search_term is not None:
+        row["search_term"] = search_term
+    return row
+
+
+def test_insert_posts_subreddit_mode(tmp_path: Path) -> None:
+    storage = StorageConfig(db_path=tmp_path / "r.db")
+    sink = make_sink(storage, project_dir=tmp_path)
+    try:
+        run_dir = _make_run_dir(tmp_path)
+        manifest = json.loads((run_dir / "manifest.json").read_text())
+        with sink.transaction():
+            sink.upsert_run(run_dir, manifest)
+            sink.insert_posts(run_dir, [_post_row("a1", "AskReddit"), _post_row("a2", "AskReddit")])
+        ro = sink.read_only_connect()
+        try:
+            rows = ro.execute("SELECT post_id, subreddit, search_term FROM posts ORDER BY post_id").fetchall()
+        finally:
+            ro.close()
+        assert rows == [("a1", "AskReddit", ""), ("a2", "AskReddit", "")]
+    finally:
+        sink.close()
+
+
+def test_insert_posts_search_mode_dedupes_same_post_under_different_terms(tmp_path: Path) -> None:
+    storage = StorageConfig(db_path=tmp_path / "r.db")
+    sink = make_sink(storage, project_dir=tmp_path)
+    try:
+        run_dir = _make_run_dir(tmp_path, scope="all-reddit-search", mode="search")
+        manifest = json.loads((run_dir / "manifest.json").read_text())
+        with sink.transaction():
+            sink.upsert_run(run_dir, manifest)
+            sink.insert_posts(
+                run_dir,
+                [
+                    _post_row("p1", "Tools", search_term="vim"),
+                    _post_row("p1", "Tools", search_term="emacs"),  # same post_id, different term
+                ],
+            )
+        ro = sink.read_only_connect()
+        try:
+            rows = ro.execute("SELECT post_id, search_term FROM posts ORDER BY search_term").fetchall()
+        finally:
+            ro.close()
+        assert rows == [("p1", "emacs"), ("p1", "vim")]
+    finally:
+        sink.close()

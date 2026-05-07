@@ -175,8 +175,38 @@ class SqliteRunSink:
         )
 
     def insert_posts(self, run_dir: Path, posts: list[dict[str, Any]]) -> None:
-        # Filled in Task 4.
-        raise NotImplementedError
+        if not posts:
+            return
+        run_dir_str = str(run_dir.resolve())
+        rows = [
+            (
+                run_dir_str,
+                str(post.get("id", "")),
+                post.get("subreddit"),
+                str(post.get("search_term", "")),
+                str(post.get("title", "")),
+                post.get("author"),
+                str(post.get("selftext", "")),
+                str(post.get("url", "")),
+                str(post.get("permalink", "")),
+                int(post.get("score", 0) or 0),
+                post.get("upvote_ratio"),
+                int(post.get("num_comments", 0) or 0),
+                post.get("created_utc"),
+                1 if post.get("over_18") else 0,
+                1 if post.get("is_self") else 0,
+                post.get("link_flair_text"),
+            )
+            for post in posts
+        ]
+        self.conn.executemany(
+            "INSERT INTO posts ("
+            " run_dir, post_id, subreddit, search_term, title, author, selftext,"
+            " url, permalink, score, upvote_ratio, num_comments, created_utc,"
+            " over_18, is_self, link_flair_text"
+            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            rows,
+        )
 
     def insert_comments(self, run_dir: Path, comments: list[dict[str, Any]]) -> None:
         # Filled in Task 5.
