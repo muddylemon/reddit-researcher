@@ -201,6 +201,18 @@ def build_parser() -> argparse.ArgumentParser:
     db_query_parser.add_argument("--project", default=None)
     db_query_parser.add_argument("--format", default="table", choices=["table", "json", "csv"])
 
+    diff_parser = subparsers.add_parser(
+        "diff",
+        help="Compare two run directories (counts, post-id sets, relevance flips).",
+    )
+    diff_parser.add_argument("run_a", help="First run directory.")
+    diff_parser.add_argument("run_b", help="Second run directory.")
+    diff_parser.add_argument("--project", default=None, help="Path to project.toml or its directory.")
+    diff_parser.add_argument(
+        "--format", default="text", choices=["text", "json"],
+        help="Output format (default text).",
+    )
+
     return parser
 
 
@@ -380,6 +392,9 @@ def _dispatch(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
     if args.command == "db":
         return _dispatch_db(args, parser)
 
+    if args.command == "diff":
+        return _dispatch_diff(args, parser)
+
     parser.error(f"Unsupported command: {args.command}")
     return 2
 
@@ -408,6 +423,77 @@ def _dispatch_db(args: argparse.Namespace, parser: argparse.ArgumentParser) -> i
         return _db_query(args, project, make_sink)
     parser.error(f"Unsupported db command: {args.db_command}")
     return 2
+
+
+def _dispatch_diff(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
+    from .db import make_sink, sync_run
+    from .diff import compute_diff, format_json, format_text
+
+    run_a = Path(args.run_a).resolve()
+    run_b = Path(args.run_b).resolve()
+    for label, run_dir in (("run_a", run_a), ("run_b", run_b)):
+        if not (run_dir / "manifest.json").exists():
+            parser.error(f"diff: no manifest.json under {label}: {run_dir}")
+
+    project_arg = getattr(args, "project", None)
+    if project_arg is None:
+        candidate = Path.cwd() / "project.toml"
+        if not candidate.exists():
+            parser.error(
+                "diff: pass --project <path> or run from a directory containing project.toml."
+            )
+        project_path = candidate
+    else:
+        project_path = find_project_config(Path(project_arg))
+    load_dotenvs_for(project_dir=project_path.parent, repo_root=REPO_ROOT)
+    project = load_project(project_path)
+
+    sink = make_sink(project.storage, project_dir=project.project_dir)
+    try:
+        for run_dir in (run_a, run_b):
+            if _needs_sync(sink, run_dir):
+                try:
+                    sync_run(sink, run_dir)
+                except (FileNotFoundError, OSError) as exc:
+                    parser.error(f"diff: {exc}")
+        try:
+            result = compute_diff(sink, run_a, run_b)
+        except LookupError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+    finally:
+        sink.close()
+
+    for warning in result.warnings:
+        print(f"warning: {warning}", file=sys.stderr)
+    if args.format == "json":
+        print(format_json(result))
+    else:
+        print(format_text(result), end="")
+    return 0
+
+
+def _needs_sync(sink, run_dir: Path) -> bool:
+    """True if the run isn't in the sink, or the manifest is newer than the synced row."""
+    import json as _json
+
+    ro = sink.read_only_connect()
+    try:
+        row = ro.execute(
+            "SELECT synced_at_utc FROM runs WHERE run_dir = ?", (str(run_dir.resolve()),)
+        ).fetchone()
+    finally:
+        ro.close()
+    if row is None:
+        return True
+    try:
+        manifest = _json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
+    except (OSError, _json.JSONDecodeError):
+        return False
+    updated = manifest.get("updated_at_utc")
+    if updated is None:
+        return False
+    return str(updated) > str(row[0])
 
 
 def _db_sync(args, project, make_sink, sync_run, parser) -> int:
