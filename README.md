@@ -21,8 +21,9 @@ relevance keywords, custom prompts, Claude Code skills).
 - **Cheap iteration.** A deterministic relevance pass runs before any LLM call, so you only spend
   inference cycles on posts that are likely worth reading.
 - **Resumable.** Scrapes checkpoint after every post; extractions reuse previously-completed chunks.
-- **Reproducible.** Every run is a folder of JSON, JSONL, and Markdown — no databases, no opaque
-  state.
+- **Reproducible.** Every run is a folder of JSON, JSONL, and Markdown. JSONL on disk is the source
+  of truth; an optional SQLite/DuckDB sink mirrors it for cross-run queries (`db query`, `diff`),
+  but you can delete the DB at any time and re-sync from JSONL.
 
 ## Requirements
 

@@ -4,7 +4,25 @@ All notable changes to Reddit Researcher are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## 0.2.0-beta
+## [0.2.0-beta] — 2026-05-07
+
+The analytics-and-multi-run line. Closes four of the five 0.2.0 roadmap items;
+time-series mode (scheduled re-runs + cross-timestamp aggregation) is deferred
+to a follow-up.
+
+Highlights:
+
+- **Multi-subreddit subreddit-mode** — scrape several communities into one combined
+  run folder.
+- **SQLite/DuckDB sink** — every run is mirrored into a small queryable DB
+  (default SQLite, opt-in DuckDB) so cross-run analysis is `SELECT ...` instead of
+  one-off scripts.
+- **`reddit-researcher diff`** — compare two runs (counts, post-id sets,
+  relevance flips).
+- **Configurable corpus formatters** — pick `compact` (default), `conversational`,
+  or `structured-json`.
+
+JSONL on disk remains canonical; the sink is a derived view.
 
 ### Added
 - Multi-subreddit subreddit-mode: `[scrape].subreddits = ["a", "b", "c"]` scrapes
@@ -50,34 +68,28 @@ All notable changes to Reddit Researcher are documented here. The format follows
   `reddit-researcher scrape cannabis marijuana drugs`.
 - `reddit-researcher init --subreddit` is now repeatable; supplying multiple
   scaffolds a `subreddits = [...]` project.
+- CI coverage gate raised from 70% to 85% (currently passing at 89%).
 
-## [Unreleased]
+### Internal
 
-Polish pass: documentation alignment + filling pipeline test gaps revealed by
-the v0.1.1-beta release coverage report.
+- New tests covering pipeline gaps revealed by the v0.1.1-beta coverage report:
+  `tests/test_extract.py` (6 tests), `tests/test_search_scrape.py` (7 tests),
+  `tests/test_run_project.py` (5 tests). Plus full test coverage for the new
+  0.2.0 features (sink, diff, corpus formatters): 203 tests passing total
+  (was 35 in 0.0.1-beta).
+- New "Caveats and known limitations" section in
+  [docs/architecture.md](docs/architecture.md) documenting Reddit's anonymous
+  in-sub search behavior, multi-subreddit handling, the ~1000-post pagination
+  cap, comment-tree limits, and relevance-filter tuning.
+- New "Local industry directory" pattern in [docs/ideas.md](docs/ideas.md) —
+  the multi-subreddit case study shape with the cannabis-businesses example.
+- `CONTRIBUTING.md` notes the optional `[praw]` and `[duckdb]` extras.
 
-### Added
-- New `tests/test_extract.py` (6 tests) — covers `extract_from_run`'s empty-posts
-  short-circuit, subreddit/search corpus selection, chunk reuse vs. force-reextract,
-  `chunk_limit` honoring, and missing-prompt validation.
-- New `tests/test_search_scrape.py` (7 tests) — covers `scrape_search_terms`'s
-  manifest stamping, search-error capture, comment-error capture, resume into an
-  existing run dir, relevance review application, term-slice arguments, and input
-  validation.
-- New `tests/test_run_project.py` (5 tests) — covers `run_project` dispatch for
-  both modes, `skip_extract`, `--run-dir` threading, and the no-prompt path.
-- New "Caveats and known limitations" section in [docs/architecture.md](docs/architecture.md):
-  documents Reddit's anonymous in-sub search behavior, the multi-subreddit gap, the
-  ~1000-post pagination cap, comment-tree limits, and relevance-filter tuning.
-- New "Local industry directory" pattern in [docs/ideas.md](docs/ideas.md) — the
-  multi-subreddit case study shape with the cannabis-businesses example.
-- CONTRIBUTING.md notes the optional `[praw]` extra for backend work.
+### Deferred to a follow-up
 
-### Changed
-- CI coverage gate raised from 70% to 85% (currently passing at 92%). `pipeline.py`
-  jumped from 27% to 98% with the new tests.
-- Roadmap 0.2.0 milestone now includes "Multi-subreddit subreddit-mode" as a real
-  friction point surfaced by the cannabis-businesses case study.
+- Time-series mode (scheduled re-runs + cross-timestamp aggregation across
+  `runs.synced_at_utc`) — the fifth 0.2.0 roadmap item. Best built on top of
+  the sink that landed in this release.
 
 ## [0.1.1-beta] — 2026-05-06
 

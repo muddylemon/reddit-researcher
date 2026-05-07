@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "reddit-researcher"
-version = "0.1.1b0"
+version = "0.2.0b0"
 description = "Run local Reddit research jobs and pipe results through a local Ollama model."
 readme = "README.md"
 license = { text = "MIT" }
