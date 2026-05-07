@@ -174,6 +174,33 @@ def build_parser() -> argparse.ArgumentParser:
     )
     review_parser.add_argument("run_dir", help="Path to a run directory.")
 
+    db_parser = subparsers.add_parser(
+        "db",
+        help="Query and sync the project's research DB.",
+    )
+    db_subs = db_parser.add_subparsers(dest="db_command", required=True)
+
+    db_sync_parser = db_subs.add_parser("sync", help="Sync run dirs into the DB.")
+    db_sync_parser.add_argument("run_dirs", nargs="*", help="One or more run directories.")
+    db_sync_parser.add_argument("--project", default=None, help="Path to project.toml or its directory.")
+    db_sync_parser.add_argument("--all", action="store_true", help="Sync every run under output_root.")
+    db_sync_parser.add_argument(
+        "--output-root", default=None,
+        help="Override output_root when using --all. Defaults to project's output_root or ./runs.",
+    )
+    db_sync_parser.add_argument(
+        "--rebuild", action="store_true",
+        help="Drop and recreate all tables before syncing (recovers from schema mismatch).",
+    )
+
+    db_status_parser = db_subs.add_parser("status", help="Show DB engine, path, schema, row counts.")
+    db_status_parser.add_argument("--project", default=None)
+
+    db_query_parser = db_subs.add_parser("query", help="Run a read-only SQL query against the DB.")
+    db_query_parser.add_argument("sql", help="SQL statement (read-only connection).")
+    db_query_parser.add_argument("--project", default=None)
+    db_query_parser.add_argument("--format", default="table", choices=["table", "json", "csv"])
+
     return parser
 
 
@@ -252,6 +279,9 @@ def main(argv: list[str] | None = None) -> int:
     except ProjectConfigError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
+    except SystemExit as exc:
+        # parser.error() raises SystemExit; surface its code as the return.
+        return int(exc.code) if exc.code is not None else 0
 
 
 def _dispatch(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
@@ -347,8 +377,73 @@ def _dispatch(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
         print(summarize_run(Path(args.run_dir)), end="")
         return 0
 
+    if args.command == "db":
+        return _dispatch_db(args, parser)
+
     parser.error(f"Unsupported command: {args.command}")
     return 2
+
+
+def _dispatch_db(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
+    from .db import make_sink, sync_run
+
+    project_arg = getattr(args, "project", None)
+    if project_arg is None:
+        candidate = Path.cwd() / "project.toml"
+        if not candidate.exists():
+            parser.error(
+                "db: pass --project <path> or run from a directory containing project.toml."
+            )
+        project_path = candidate
+    else:
+        project_path = find_project_config(Path(project_arg))
+    load_dotenvs_for(project_dir=project_path.parent, repo_root=REPO_ROOT)
+    project = load_project(project_path)
+
+    if args.db_command == "sync":
+        return _db_sync(args, project, make_sink, sync_run, parser)
+    if args.db_command == "status":
+        parser.error("db status: not implemented yet (Task 11)")
+    if args.db_command == "query":
+        parser.error("db query: not implemented yet (Task 12)")
+    parser.error(f"Unsupported db command: {args.db_command}")
+    return 2
+
+
+def _db_sync(args, project, make_sink, sync_run, parser) -> int:
+    sink = make_sink(project.storage, project_dir=project.project_dir)
+    try:
+        if args.rebuild:
+            sink.rebuild()
+        run_dirs = [Path(p) for p in (args.run_dirs or [])]
+        if args.all:
+            output_root = (
+                Path(args.output_root) if args.output_root
+                else (project.output_root or DEFAULT_OUTPUT_ROOT)
+            )
+            run_dirs.extend(_walk_run_dirs(output_root))
+        if not run_dirs:
+            parser.error(
+                "db sync: pass one or more run directories, or --all with an output_root."
+            )
+        synced = 0
+        for run_dir in run_dirs:
+            sync_run(sink, run_dir)
+            synced += 1
+        print(f"synced {synced} run dir(s) into {project.storage.db_path}")
+        return 0
+    finally:
+        sink.close()
+
+
+def _walk_run_dirs(output_root: Path) -> list[Path]:
+    """Yield every run dir under output_root that has a manifest.json."""
+    if not output_root.exists():
+        return []
+    found: list[Path] = []
+    for manifest_path in output_root.rglob("manifest.json"):
+        found.append(manifest_path.parent)
+    return found
 
 
 if __name__ == "__main__":

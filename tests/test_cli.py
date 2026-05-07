@@ -91,8 +91,8 @@ def test_init_with_explicit_template(tmp_path: Path) -> None:
 
 
 def test_init_requires_name_when_not_listing(tmp_path: Path) -> None:
-    with pytest.raises(SystemExit):
-        cli.main(["init", "--projects-dir", str(tmp_path)])
+    rc = cli.main(["init", "--projects-dir", str(tmp_path)])
+    assert rc == 2
 
 
 def test_list_command_runs(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
