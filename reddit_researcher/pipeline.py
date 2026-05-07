@@ -5,7 +5,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from .config import AnalyzeConfig, ProjectConfig, ScrapeConfig
-from .manifest import normalize_manifest, stamp as stamp_manifest
+from .db import make_sink, sync_run
+from .manifest import normalize_manifest
+from .manifest import stamp as stamp_manifest
 from .ollama_client import OllamaClient
 from .progress import RunLogger
 from .prompting import (
@@ -562,11 +564,20 @@ def run_project(
             term_limit=term_limit,
         )
 
-    if skip_extract:
-        return scrape_dir
+    if not skip_extract and project.analyze.prompt_file is not None:
+        extract_from_run(run_dir=scrape_dir, analyze=project.analyze)
 
-    if project.analyze.prompt_file is None:
-        return scrape_dir
+    if project.storage.auto_sync:
+        try:
+            sink = make_sink(project.storage, project_dir=project.project_dir)
+        except Exception as exc:
+            RunLogger(scrape_dir).info(f"auto_sync skipped: could not open DB: {exc}")
+        else:
+            try:
+                sync_run(sink, scrape_dir)
+            except Exception as exc:
+                RunLogger(scrape_dir).info(f"auto_sync skipped: sync failed: {exc}")
+            finally:
+                sink.close()
 
-    extract_from_run(run_dir=scrape_dir, analyze=project.analyze)
     return scrape_dir
