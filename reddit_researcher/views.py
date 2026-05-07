@@ -13,7 +13,7 @@ from collections import Counter
 from pathlib import Path
 
 from .config import find_project_config, load_project
-from .manifest import MANIFEST_SCHEMA_VERSION, read_schema_version
+from .manifest import MANIFEST_SCHEMA_VERSION, normalize_manifest, read_schema_version
 
 
 def _truncate(value: str, limit: int) -> str:
@@ -83,7 +83,7 @@ def list_runs(runs_dir: Path, *, limit: int = 20) -> str:
             if not manifest_path.is_file():
                 continue
             try:
-                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                manifest = normalize_manifest(json.loads(manifest_path.read_text(encoding="utf-8")))
             except json.JSONDecodeError:
                 manifest = {"status": "broken-manifest"}
             mtime = manifest_path.stat().st_mtime
@@ -114,7 +114,7 @@ def summarize_run(run_dir: Path) -> str:
         return f"Run has no manifest.json: {run_dir}\n"
 
     try:
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest = normalize_manifest(json.loads(manifest_path.read_text(encoding="utf-8")))
     except json.JSONDecodeError as exc:
         return f"Manifest is unreadable ({manifest_path}): {exc}\n"
 

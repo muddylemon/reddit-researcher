@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from .config import AnalyzeConfig, ProjectConfig, ScrapeConfig
-from .manifest import stamp as stamp_manifest
+from .manifest import normalize_manifest, stamp as stamp_manifest
 from .ollama_client import OllamaClient
 from .progress import RunLogger
 from .prompting import (
@@ -381,7 +381,7 @@ def extract_from_run(
     manifest_path = run_dir / "manifest.json"
     manifest: dict = {}
     if manifest_path.exists():
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest = normalize_manifest(json.loads(manifest_path.read_text(encoding="utf-8")))
 
     is_search = manifest.get("mode") == "search"
     subreddit = manifest.get("subreddit") or "unknown"
