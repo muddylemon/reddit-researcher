@@ -246,3 +246,28 @@ def test_insert_comments_round_trips(tmp_path: Path) -> None:
         assert rows == [("c1", "a1", "interesting", 3), ("c2", "a1", "interesting", 3)]
     finally:
         sink.close()
+
+
+def test_insert_relevance_round_trips(tmp_path: Path) -> None:
+    storage = StorageConfig(db_path=tmp_path / "r.db")
+    sink = make_sink(storage, project_dir=tmp_path)
+    try:
+        run_dir = _make_run_dir(tmp_path)
+        manifest = json.loads((run_dir / "manifest.json").read_text())
+        decisions = [
+            {"post_id": "p1", "subreddit": "AskReddit", "decision": "include", "reason": "matches keyword"},
+            {"post_id": "p2", "subreddit": "AskReddit", "decision": "exclude", "reason": "no match"},
+        ]
+        with sink.transaction():
+            sink.upsert_run(run_dir, manifest)
+            sink.insert_relevance(run_dir, decisions)
+        ro = sink.read_only_connect()
+        try:
+            rows = ro.execute(
+                "SELECT post_id, decision, reason FROM relevance_decisions ORDER BY post_id"
+            ).fetchall()
+        finally:
+            ro.close()
+        assert rows == [("p1", "include", "matches keyword"), ("p2", "exclude", "no match")]
+    finally:
+        sink.close()

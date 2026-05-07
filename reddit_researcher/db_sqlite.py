@@ -236,8 +236,26 @@ class SqliteRunSink:
         )
 
     def insert_relevance(self, run_dir: Path, decisions: list[dict[str, Any]]) -> None:
-        # Filled in Task 6.
-        raise NotImplementedError
+        if not decisions:
+            return
+        run_dir_str = str(run_dir.resolve())
+        rows = [
+            (
+                run_dir_str,
+                str(decision.get("post_id", "")),
+                str(decision.get("search_term", "")),
+                decision.get("subreddit"),
+                str(decision.get("decision", "")),
+                str(decision.get("reason", "")),
+            )
+            for decision in decisions
+        ]
+        self.conn.executemany(
+            "INSERT INTO relevance_decisions ("
+            " run_dir, post_id, search_term, subreddit, decision, reason"
+            ") VALUES (?, ?, ?, ?, ?, ?)",
+            rows,
+        )
 
     def delete_run(self, run_dir: Path) -> None:
         run_dir_str = str(run_dir.resolve())
