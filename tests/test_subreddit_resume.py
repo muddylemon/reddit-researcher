@@ -121,6 +121,23 @@ def test_subreddit_scrape_resumes_from_existing_run(monkeypatch, tmp_path: Path)
     assert manifest["status"] == "complete"
 
 
+def test_subreddit_scrape_writes_unwrapped_raw_posts_for_single_sub(monkeypatch, tmp_path: Path) -> None:
+    posts = [_make_post("p1")]
+    comments = {"p1": [_make_comment("c1", "p1")]}
+    _patch_client(monkeypatch, posts, comments)
+
+    run_dir = pipeline.scrape_subreddit(
+        subreddits=["testsub"],
+        output_root=tmp_path,
+        scrape=ScrapeConfig(mode="subreddit", subreddits=["testsub"], post_limit=1, comment_limit=1),
+    )
+
+    raw = json.loads((run_dir / "raw" / "posts.json").read_text(encoding="utf-8"))
+    # Single-sub runs write the API payload directly (not wrapped in a dict by sub).
+    assert raw.get("subreddit") == "testsub"
+    assert "pages" in raw
+
+
 def test_subreddit_scrape_writes_per_subreddit_manifest_section(monkeypatch, tmp_path: Path) -> None:
     posts = [_make_post("p1"), _make_post("p2")]
     comments = {"p1": [_make_comment("c1", "p1")], "p2": [_make_comment("c2", "p2")]}

@@ -126,6 +126,18 @@ def scrape_subreddit(
         manifest["per_subreddit"] = per_sub
         write_json(run_dir / "manifest.json", stamp_manifest(manifest))
 
+    def _write_raw_posts() -> None:
+        """Write raw/posts.json. For single-sub runs, write the API payload
+        directly (preserves byte-equivalent shape with pre-multi-sub runs).
+        For multi-sub, write a dict keyed by subreddit.
+        """
+        if len(subreddits) == 1:
+            single_payload = raw_payloads_by_sub.get(subreddits[0])
+            if single_payload is not None:
+                write_json(run_dir / "raw" / "posts.json", single_payload)
+        else:
+            write_json(run_dir / "raw" / "posts.json", raw_payloads_by_sub)
+
     checkpoint("starting")
     logger.info(f"Starting subreddit scrape {subreddits} into {run_dir}")
 
@@ -145,7 +157,7 @@ def scrape_subreddit(
             per_sub[sub]["status"] = "fetch_error"
             per_sub[sub]["error"] = str(exc)
             logger.info(f"r/{sub} listing fetch failed: {exc}")
-            write_json(run_dir / "raw" / "posts.json", raw_payloads_by_sub)
+            _write_raw_posts()
             checkpoint("fetching_comments")
             continue
 
@@ -181,7 +193,7 @@ def scrape_subreddit(
             checkpoint("fetching_comments")
 
         per_sub[sub]["status"] = "complete"
-        write_json(run_dir / "raw" / "posts.json", raw_payloads_by_sub)
+        _write_raw_posts()
         checkpoint("fetching_comments")
 
     checkpoint("complete")
