@@ -67,6 +67,7 @@ class AnalyzeConfig:
     chunk_char_limit: int = 12000
     chunk_limit: int | None = None
     force_reextract: bool = False
+    corpus_format: str = "compact"
 
 
 @dataclass
@@ -242,6 +243,16 @@ def load_project(config_path: Path) -> ProjectConfig:
         )
 
     analyze_raw = raw.get("analyze", {})
+    analyze_corpus_format = analyze_raw.get("corpus_format", "compact")
+    from .corpus_formatters import VALID_CORPUS_FORMATS
+
+    if analyze_corpus_format not in VALID_CORPUS_FORMATS:
+        raise ProjectConfigError(
+            f"invalid analyze.corpus_format: {analyze_corpus_format!r}. "
+            f"Must be one of {sorted(VALID_CORPUS_FORMATS)}.",
+            path=config_path,
+        )
+
     analyze = AnalyzeConfig(
         model=analyze_raw.get("model", _default_ollama_model()),
         prompt_file=_resolve_path(analyze_raw.get("prompt_file"), base_dir),
@@ -250,6 +261,7 @@ def load_project(config_path: Path) -> ProjectConfig:
         chunk_char_limit=int(analyze_raw.get("chunk_char_limit", 12000)),
         chunk_limit=analyze_raw.get("chunk_limit"),
         force_reextract=bool(analyze_raw.get("force_reextract", False)),
+        corpus_format=analyze_corpus_format,
     )
 
     relevance_raw = raw.get("relevance", {})
