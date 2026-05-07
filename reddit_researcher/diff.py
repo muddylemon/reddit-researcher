@@ -63,13 +63,29 @@ def _summary_for(conn: Any, run_dir: Path) -> RunSummary:
 
 def compute_diff(sink: RunSink, run_a: Path, run_b: Path) -> DiffResult:
     """Compute the structured diff between two synced runs."""
+    a_str = str(run_a.resolve())
+    b_str = str(run_b.resolve())
     conn = sink.read_only_connect()
     try:
         a = _summary_for(conn, run_a)
         b = _summary_for(conn, run_b)
-        return DiffResult(a=a, b=b)
+        result = DiffResult(a=a, b=b)
+        _fill_posts(conn, a_str, b_str, result)
+        return result
     finally:
         conn.close()
+
+
+def _fill_posts(conn: Any, a_str: str, b_str: str, result: DiffResult) -> None:
+    a_ids = {row[0] for row in conn.execute(
+        "SELECT post_id FROM posts WHERE run_dir = ?", (a_str,)
+    )}
+    b_ids = {row[0] for row in conn.execute(
+        "SELECT post_id FROM posts WHERE run_dir = ?", (b_str,)
+    )}
+    result.posts_only_in_a = sorted(a_ids - b_ids)
+    result.posts_only_in_b = sorted(b_ids - a_ids)
+    result.posts_in_both = sorted(a_ids & b_ids)
 
 
 def format_text(result: DiffResult) -> str:

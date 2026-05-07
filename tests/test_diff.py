@@ -97,3 +97,43 @@ def test_compute_diff_returns_diffresult(tmp_path: Path) -> None:
         assert isinstance(result.b, RunSummary)
     finally:
         sink.close()
+
+
+def test_compute_diff_posts_only_in_a(tmp_path: Path) -> None:
+    storage = StorageConfig(db_path=tmp_path / "r.db")
+    sink = make_sink(storage, project_dir=tmp_path)
+    try:
+        run_a = _make_synced_run(
+            sink, tmp_path, scope="AskReddit", ts="20260507-120000",
+            posts=[_post_row("p1"), _post_row("p2"), _post_row("p3")],
+        )
+        run_b = _make_synced_run(
+            sink, tmp_path, scope="AskReddit", ts="20260508-120000",
+            posts=[_post_row("p2"), _post_row("p3"), _post_row("p4")],
+        )
+        result = compute_diff(sink, run_a, run_b)
+        assert sorted(result.posts_only_in_a) == ["p1"]
+        assert sorted(result.posts_only_in_b) == ["p4"]
+        assert sorted(result.posts_in_both) == ["p2", "p3"]
+    finally:
+        sink.close()
+
+
+def test_compute_diff_identical_post_sets(tmp_path: Path) -> None:
+    storage = StorageConfig(db_path=tmp_path / "r.db")
+    sink = make_sink(storage, project_dir=tmp_path)
+    try:
+        run_a = _make_synced_run(
+            sink, tmp_path, scope="AskReddit", ts="20260507-120000",
+            posts=[_post_row("p1"), _post_row("p2")],
+        )
+        run_b = _make_synced_run(
+            sink, tmp_path, scope="AskReddit", ts="20260508-120000",
+            posts=[_post_row("p1"), _post_row("p2")],
+        )
+        result = compute_diff(sink, run_a, run_b)
+        assert result.posts_only_in_a == []
+        assert result.posts_only_in_b == []
+        assert sorted(result.posts_in_both) == ["p1", "p2"]
+    finally:
+        sink.close()
