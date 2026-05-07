@@ -34,7 +34,7 @@ from reddit_researcher.reddit_client import RedditClient, make_reddit_client
 
 
 def test_factory_returns_json_client_by_default() -> None:
-    client = make_reddit_client(ScrapeConfig(subreddit="x"))
+    client = make_reddit_client(ScrapeConfig(subreddits=["x"]))
     assert isinstance(client, RedditClient)
 
 
@@ -49,7 +49,7 @@ def test_factory_routes_to_praw(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv(ENV_PRAW_CLIENT_ID, "abc")
     monkeypatch.setenv(ENV_PRAW_CLIENT_SECRET, "xyz")
 
-    client = make_reddit_client(ScrapeConfig(subreddit="x", backend="praw"))
+    client = make_reddit_client(ScrapeConfig(subreddits=["x"], backend="praw"))
     assert isinstance(client, PrawRedditClient)
     assert client.reddit is fake_reddit
     assert fake_reddit.read_only is True

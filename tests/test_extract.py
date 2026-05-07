@@ -243,6 +243,45 @@ def test_extract_chunk_limit_caps_processing(tmp_path: Path, monkeypatch: pytest
     assert manifest["analysis"]["chunk_limit"] == 2
 
 
+def test_extract_multi_sub_uses_combined_scope_label(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured: list[_StubOllama] = []
+    monkeypatch.setattr(pipeline, "OllamaClient", _stub_ollama_factory(captured))
+
+    run_dir = tmp_path / "run"
+    _seed_run(
+        run_dir,
+        posts=[
+            {"id": "p1", "title": "Post A", "selftext": "body a", "subreddit": "a", "score": 3, "num_comments": 1},
+            {"id": "p2", "title": "Post B", "selftext": "body b", "subreddit": "b", "score": 5, "num_comments": 0},
+        ],
+        comments=[{"id": "c1", "post_id": "p1", "depth": 0, "score": 2, "body": "a comment"}],
+        manifest={
+            "mode": "subreddit",
+            "subreddits": ["a", "b"],
+            "per_subreddit": {
+                "a": {"post_count": 1, "comment_count": 1},
+                "b": {"post_count": 1, "comment_count": 0},
+            },
+            "post_count": 2,
+            "comment_count": 1,
+            "status": "complete",
+            "schema_version": 2,
+        },
+    )
+
+    pipeline.extract_from_run(
+        run_dir=run_dir,
+        analyze=AnalyzeConfig(prompt_file=_prompt_file(tmp_path), chunk_char_limit=12000),
+    )
+
+    # The first generate() call is the chunk prompt; it must contain the
+    # combined scope label produced by the multi-sub branch of scope_label_for.
+    chunk_prompt = captured[0].calls[0]
+    assert "r/a and r/b" in chunk_prompt
+
+
 def test_extract_requires_prompt_file() -> None:
     with pytest.raises(ValueError, match="prompt_file"):
         pipeline.extract_from_run(run_dir=Path("/tmp/x"), analyze=AnalyzeConfig())

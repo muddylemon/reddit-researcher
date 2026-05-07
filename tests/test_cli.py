@@ -193,3 +193,20 @@ def test_run_command_dispatches_subreddit(monkeypatch: pytest.MonkeyPatch, tmp_p
     assert rc == 0
     assert captured["skip_extract"] is True
     assert captured["output_root"] == tmp_path / "runs"
+
+
+def test_scrape_subcommand_accepts_multiple_subreddits() -> None:
+    from reddit_researcher.cli import build_parser
+
+    parser = build_parser()
+    args = parser.parse_args(["scrape", "cannabis", "marijuana", "drugs"])
+    assert args.command == "scrape"
+    assert args.subreddit == ["cannabis", "marijuana", "drugs"]
+
+
+def test_scrape_subcommand_accepts_single_subreddit() -> None:
+    from reddit_researcher.cli import build_parser
+
+    parser = build_parser()
+    args = parser.parse_args(["scrape", "personalfinance"])
+    assert args.subreddit == ["personalfinance"]

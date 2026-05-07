@@ -61,3 +61,37 @@ def read_jsonl(path: Path) -> list[dict]:
                 continue
             rows.append(json.loads(line))
     return rows
+
+
+def multi_subreddit_scope(subreddits: list[str], *, max_chars: int = 60) -> str:
+    """Build the run-dir scope segment for one or many subreddits.
+
+    For a single sub, returns the name unchanged (preserves today's run-dir
+    naming). For multiple subs, lowercases and joins with '-', truncating
+    to `max_chars` by dropping trailing entries and appending `+K`.
+    """
+    if not subreddits:
+        raise ValueError("multi_subreddit_scope requires at least one subreddit")
+
+    if len(subreddits) == 1:
+        return subreddits[0]
+
+    lowered = [sub.lower() for sub in subreddits]
+    joined = "-".join(lowered)
+    if len(joined) <= max_chars:
+        return joined
+
+    # Drop trailing entries until the remainder + "+K" suffix fits.
+    kept = list(lowered)
+    dropped = 0
+    while kept:
+        suffix = f"+{dropped}" if dropped else ""
+        candidate = "-".join(kept) + suffix
+        if len(candidate) <= max_chars:
+            return candidate
+        kept.pop()
+        dropped += 1
+
+    # Pathological: even the first sub plus suffix exceeds max_chars.
+    # Fall back to a hard truncation of the first sub.
+    return lowered[0][:max_chars]

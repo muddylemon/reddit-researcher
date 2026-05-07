@@ -4,6 +4,31 @@ All notable changes to Reddit Researcher are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.2.0-beta
+
+### Added
+- Multi-subreddit subreddit-mode: `[scrape].subreddits = ["a", "b", "c"]` scrapes
+  multiple communities into a single combined run folder, with per-sub status
+  tracked in `manifest["per_subreddit"]`. Single-sub projects continue to work
+  unchanged. `post_limit` applies per-subreddit (matching search-mode semantics).
+- Manifest `schema_version` bumped 1 → 2 (additive). New fields: `subreddits`
+  (list, always present in subreddit-mode), `per_subreddit` (per-sub counters
+  and status). Old (v1) manifests read forward via `normalize_manifest` —
+  no rewriting needed.
+- `multi_subreddit_scope` helper for run-dir naming with multiple subs.
+
+### Changed
+
+- `ScrapeConfig.subreddit` (str) replaced by `ScrapeConfig.subreddits` (list).
+  TOML projects continue to accept either `subreddit = "x"` or
+  `subreddits = ["a", "b"]` (but not both).
+- `scaffold_project` parameter `subreddits` (search-mode allowlist) renamed to
+  `allowlist_subreddits` to free up the name for the new multi-sub scaffolder.
+- `reddit-researcher scrape <name>` now accepts multiple positional names:
+  `reddit-researcher scrape cannabis marijuana drugs`.
+- `reddit-researcher init --subreddit` is now repeatable; supplying multiple
+  scaffolds a `subreddits = [...]` project.
+
 ## [Unreleased]
 
 Polish pass: documentation alignment + filling pipeline test gaps revealed by

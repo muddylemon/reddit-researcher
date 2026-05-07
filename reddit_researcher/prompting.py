@@ -26,13 +26,18 @@ def quote_search_term(term: str) -> str:
 
 
 def build_corpus(posts: list[dict], comments: list[dict]) -> str:
-    """Build a text corpus for subreddit-mode runs (posts + flat comments)."""
+    """Build a text corpus for subreddit-mode runs (posts + flat comments).
+
+    Prefixes each post header with `r/<subreddit>` so the LLM has the source
+    community on every line — matters when the run combines multiple subs.
+    """
     lines: list[str] = []
 
     for post in posts:
+        subreddit = post.get("subreddit") or "unknown"
         lines.extend(
             [
-                f"[POST {post['id']}] title: {post['title']}",
+                f"[POST {post['id']}] r/{subreddit} title: {post['title']}",
                 f"author: {post.get('author') or 'unknown'} | score: {post.get('score', 0)} | comments: {post.get('num_comments', 0)}",
                 f"flair: {post.get('link_flair_text') or 'none'}",
             ]
@@ -161,12 +166,32 @@ def build_synthesis_prompt(
     )
 
 
-def scope_label_for(subreddit: str | None, search_terms: list[str] | None) -> str:
-    """Produce a human-readable label for the run's data scope."""
+def scope_label_for(
+    subreddit: str | None,
+    search_terms: list[str] | None,
+    subreddits: list[str] | None = None,
+) -> str:
+    """Produce a human-readable label for the run's data scope.
+
+    Accepts either a single `subreddit` (legacy callers) or a `subreddits`
+    list (multi-sub mode). Search-mode takes precedence when `search_terms`
+    is truthy.
+    """
     if search_terms:
         if subreddit:
             return f"a Reddit search across r/{subreddit}"
         return "a global Reddit search"
+
+    if subreddits:
+        if len(subreddits) == 1:
+            return f"r/{subreddits[0]}"
+        if len(subreddits) == 2:
+            return f"r/{subreddits[0]} and r/{subreddits[1]}"
+        if len(subreddits) <= 5:
+            return ", ".join(f"r/{s}" for s in subreddits)
+        head = ", ".join(f"r/{s}" for s in subreddits[:3])
+        return f"{head}, and {len(subreddits) - 3} others"
+
     if subreddit:
         return f"r/{subreddit}"
     return "Reddit"

@@ -64,7 +64,11 @@ def build_parser() -> argparse.ArgumentParser:
         "scrape",
         help="Scrape a single subreddit's listing into a run folder.",
     )
-    scrape_parser.add_argument("subreddit", help="Subreddit name without the r/ prefix.")
+    scrape_parser.add_argument(
+        "subreddit",
+        nargs="+",
+        help="One or more subreddit names without the r/ prefix.",
+    )
     _add_scrape_arguments(scrape_parser)
 
     search_parser = subparsers.add_parser(
@@ -101,7 +105,12 @@ def build_parser() -> argparse.ArgumentParser:
         default="subreddit",
         help="Project mode. 'subreddit' targets one community; 'search' targets terms.",
     )
-    init_parser.add_argument("--subreddit", help="Subreddit name (required for --mode subreddit).")
+    init_parser.add_argument(
+        "--subreddit",
+        action="append",
+        default=[],
+        help="Subreddit name (required for --mode subreddit). Repeatable for multi-sub scaffolds.",
+    )
     init_parser.add_argument(
         "--term",
         action="append",
@@ -266,7 +275,7 @@ def _dispatch(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
     if args.command == "scrape":
         scrape_cfg = _scrape_config_from_args(args)
         run_dir = scrape_subreddit(
-            subreddit=args.subreddit,
+            subreddits=list(args.subreddit),
             output_root=Path(args.output_root),
             scrape=scrape_cfg,
         )
@@ -306,12 +315,14 @@ def _dispatch(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
         target = projects_dir / args.name
         from .config import _default_ollama_model
 
+        subreddit_args = list(args.subreddit) if args.subreddit else []
         written = scaffold_project(
             project_dir=target,
             mode=args.mode,
-            subreddit=args.subreddit,
+            subreddit=subreddit_args[0] if len(subreddit_args) == 1 else None,
+            subreddits=subreddit_args if len(subreddit_args) > 1 else None,
             terms=args.term,
-            subreddits=args.allowlist_subreddit,
+            allowlist_subreddits=args.allowlist_subreddit,
             model=args.model or _default_ollama_model(),
             description=args.description,
             prompt_template=args.template,

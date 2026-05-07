@@ -21,7 +21,7 @@ def test_scaffold_subreddit_project_writes_expected_files(tmp_path: Path) -> Non
 
     project = load_project(find_project_config(project_dir))
     assert project.scrape.mode == "subreddit"
-    assert project.scrape.subreddit == "Supplements"
+    assert project.scrape.subreddits == ["Supplements"]
     assert project.analyze.model == "qwen3:8b"
     assert project.analyze.prompt_file == (project_dir / "prompt.md").resolve()
 
@@ -32,7 +32,7 @@ def test_scaffold_search_project_writes_terms_and_subreddits(tmp_path: Path) -> 
         project_dir=project_dir,
         mode="search",
         terms=["alice", "bob"],
-        subreddits=["fitness", "nutrition"],
+        allowlist_subreddits=["fitness", "nutrition"],
     )
 
     names = sorted(p.name for p in written)
@@ -99,3 +99,34 @@ def test_scaffold_force_overwrites(tmp_path: Path) -> None:
     )
     assert (project_dir / "prompt.md") in written
     assert "custom content" not in (project_dir / "prompt.md").read_text(encoding="utf-8")
+
+
+def test_scaffold_project_writes_multi_sub_toml(tmp_path):
+    from reddit_researcher.templates import scaffold_project
+
+    target = tmp_path / "missouri-cannabis"
+    scaffold_project(
+        project_dir=target,
+        mode="subreddit",
+        subreddits=["cannabis", "marijuana", "drugs"],
+        model="qwen3:8b",
+        description="Cannabis discussion across three subs.",
+    )
+    body = (target / "project.toml").read_text(encoding="utf-8")
+    assert 'subreddits = ["cannabis", "marijuana", "drugs"]' in body
+    assert 'subreddit = "' not in body  # multi-sub form replaces the singular
+
+
+def test_scaffold_project_single_sub_still_uses_singular(tmp_path):
+    from reddit_researcher.templates import scaffold_project
+
+    target = tmp_path / "single-faq"
+    scaffold_project(
+        project_dir=target,
+        mode="subreddit",
+        subreddit="personalfinance",
+        model="qwen3:8b",
+    )
+    body = (target / "project.toml").read_text(encoding="utf-8")
+    assert 'subreddit = "personalfinance"' in body
+    assert "subreddits =" not in body

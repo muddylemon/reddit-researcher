@@ -24,6 +24,7 @@ def test_build_corpus_includes_posts_and_comments() -> None:
         posts=[
             {
                 "id": "post1",
+                "subreddit": "Supplements",
                 "title": "Question about magnesium",
                 "author": "alice",
                 "score": 12,
@@ -42,8 +43,17 @@ def test_build_corpus_includes_posts_and_comments() -> None:
             }
         ],
     )
-    assert "[POST post1]" in corpus
+    assert "[POST post1] r/Supplements" in corpus
     assert "[COMMENT comment1]" in corpus
+
+
+def test_build_corpus_handles_posts_without_subreddit() -> None:
+    corpus = build_corpus(
+        posts=[{"id": "p", "title": "t", "author": "a", "score": 0, "num_comments": 0}],
+        comments=[],
+    )
+    # Missing subreddit falls back to "unknown" (mirrors build_search_corpus behavior).
+    assert "[POST p] r/unknown" in corpus
 
 
 def test_prompt_builders_embed_key_context() -> None:
@@ -115,3 +125,25 @@ def test_scope_label_distinguishes_modes() -> None:
     assert scope_label_for(subreddit="Supplements", search_terms=None) == "r/Supplements"
     assert scope_label_for(subreddit=None, search_terms=["alice"]) == "a global Reddit search"
     assert scope_label_for(subreddit="keto", search_terms=["alice"]) == "a Reddit search across r/keto"
+
+
+def test_scope_label_for_single_sub_via_list() -> None:
+    assert scope_label_for(subreddit=None, search_terms=None, subreddits=["Supplements"]) == "r/Supplements"
+
+
+def test_scope_label_for_two_subs_uses_and() -> None:
+    assert scope_label_for(subreddit=None, search_terms=None, subreddits=["a", "b"]) == "r/a and r/b"
+
+
+def test_scope_label_for_three_subs_oxford_comma() -> None:
+    assert scope_label_for(subreddit=None, search_terms=None, subreddits=["a", "b", "c"]) == "r/a, r/b, r/c"
+
+
+def test_scope_label_for_many_subs_truncates() -> None:
+    subs = ["a", "b", "c", "d", "e", "f", "g"]
+    assert scope_label_for(subreddit=None, search_terms=None, subreddits=subs) == "r/a, r/b, r/c, and 4 others"
+
+
+def test_scope_label_for_legacy_subreddit_arg_still_works() -> None:
+    # Existing call sites pass `subreddit` only; behavior must be unchanged.
+    assert scope_label_for(subreddit="Supplements", search_terms=None) == "r/Supplements"

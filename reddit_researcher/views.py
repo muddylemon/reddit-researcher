@@ -13,7 +13,7 @@ from collections import Counter
 from pathlib import Path
 
 from .config import find_project_config, load_project
-from .manifest import MANIFEST_SCHEMA_VERSION, read_schema_version
+from .manifest import MANIFEST_SCHEMA_VERSION, normalize_manifest, read_schema_version
 
 
 def _truncate(value: str, limit: int) -> str:
@@ -56,7 +56,8 @@ def list_projects(projects_dir: Path) -> str:
             rows.append([entry.name, "ERROR", str(exc)[:60], ""])
             continue
         if project.scrape.mode == "subreddit":
-            scope = f"r/{project.scrape.subreddit}"
+            subs = project.scrape.subreddits
+            scope = f"r/{subs[0]}" if len(subs) == 1 else f"{len(subs)} subs: " + ", ".join(f"r/{s}" for s in subs)
         else:
             scope = "search"
             if project.scrape.terms_file:
@@ -83,7 +84,7 @@ def list_runs(runs_dir: Path, *, limit: int = 20) -> str:
             if not manifest_path.is_file():
                 continue
             try:
-                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                manifest = normalize_manifest(json.loads(manifest_path.read_text(encoding="utf-8")))
             except json.JSONDecodeError:
                 manifest = {"status": "broken-manifest"}
             mtime = manifest_path.stat().st_mtime
@@ -114,7 +115,7 @@ def summarize_run(run_dir: Path) -> str:
         return f"Run has no manifest.json: {run_dir}\n"
 
     try:
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest = normalize_manifest(json.loads(manifest_path.read_text(encoding="utf-8")))
     except json.JSONDecodeError as exc:
         return f"Manifest is unreadable ({manifest_path}): {exc}\n"
 
@@ -136,7 +137,13 @@ def summarize_run(run_dir: Path) -> str:
             scope += f", {len(subs)} subs"
         scope += ")"
     else:
-        scope = f"r/{manifest.get('subreddit', '?')}"
+        subs = manifest.get("subreddits") or []
+        if not subs:
+            scope = "r/?"
+        elif len(subs) == 1:
+            scope = f"r/{subs[0]}"
+        else:
+            scope = f"{len(subs)} subs (" + ", ".join(f"r/{s}" for s in subs) + ")"
     lines.append(f"Mode:    {mode}    scope: {scope}    status: {status}")
 
     sort = manifest.get("sort", "?")
