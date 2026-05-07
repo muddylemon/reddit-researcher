@@ -72,7 +72,34 @@ def _subreddit_compact(posts: list[dict], comments: list[dict]) -> str:
 
 
 def _subreddit_conversational(posts: list[dict], comments: list[dict]) -> str:
-    raise NotImplementedError  # Filled in Task 3.
+    """Markdown-headed conversational subreddit-mode corpus."""
+    lines: list[str] = []
+
+    # Build a lookup so each post's comments appear immediately after it.
+    comments_by_post: dict[str, list[dict]] = {}
+    for comment in comments:
+        comments_by_post.setdefault(str(comment.get("post_id", "")), []).append(comment)
+
+    for post in posts:
+        subreddit = post.get("subreddit") or "unknown"
+        author = post.get("author") or "unknown"
+        score = post.get("score", 0)
+        ncomments = post.get("num_comments", 0)
+        lines.append(f"## Post: {post['title']}")
+        lines.append(f"*r/{subreddit} — by {author} — {score} points, {ncomments} comments*")
+        selftext = (post.get("selftext") or "").strip()
+        if selftext:
+            lines.append("")
+            lines.append(selftext)
+        for comment in comments_by_post.get(str(post.get("id", "")), []):
+            c_author = comment.get("author") or "unknown"
+            c_score = comment.get("score", 0)
+            lines.append("")
+            lines.append(f"### Comment by {c_author} ({c_score} points)")
+            lines.append((comment.get("body") or "").strip())
+        lines.append("")
+
+    return "\n".join(lines).strip() + "\n"
 
 
 def _subreddit_structured_json(posts: list[dict], comments: list[dict]) -> str:
@@ -117,7 +144,41 @@ def _search_compact(posts: list[dict]) -> str:
 
 
 def _search_conversational(posts: list[dict]) -> str:
-    raise NotImplementedError  # Filled in Task 3.
+    """Markdown-headed conversational search-mode corpus, grouped by search term."""
+    lines: list[str] = []
+    active_term: str | None = None
+
+    sorted_posts = sorted(
+        posts, key=lambda post: (post.get("search_term") or "", -(post.get("score") or 0))
+    )
+    for post in sorted_posts:
+        search_term = post.get("search_term") or "unknown"
+        if search_term != active_term:
+            if lines:
+                lines.append("")
+            lines.append(f"# Search term: {search_term}")
+            active_term = search_term
+            lines.append("")
+
+        subreddit = post.get("subreddit") or "unknown"
+        author = post.get("author") or "unknown"
+        score = post.get("score", 0)
+        ncomments = post.get("num_comments", 0)
+        lines.append(f"## Post: {post['title']}")
+        lines.append(f"*r/{subreddit} — by {author} — {score} points, {ncomments} comments*")
+        selftext = (post.get("selftext") or "").strip()
+        if selftext:
+            lines.append("")
+            lines.append(selftext)
+        for comment in post.get("comments") or []:
+            c_author = comment.get("author") or "unknown"
+            c_score = comment.get("score", 0)
+            lines.append("")
+            lines.append(f"### Comment by {c_author} ({c_score} points)")
+            lines.append((comment.get("body") or "").strip())
+        lines.append("")
+
+    return "\n".join(lines).strip() + "\n"
 
 
 def _search_structured_json(posts: list[dict]) -> str:

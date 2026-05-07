@@ -83,3 +83,36 @@ def test_search_compact_matches_legacy_build_search_corpus() -> None:
     legacy = build_search_corpus(posts)
     new = format_corpus(mode="search", fmt="compact", posts=posts)
     assert new == legacy
+
+
+def test_subreddit_conversational_uses_markdown_headings() -> None:
+    posts = [_post("p1", title="What's the best book?", selftext="Curious about non-fiction.")]
+    comments = [_comment("c1", "p1", body="I just finished Sapiens.")]
+    out = format_corpus(mode="subreddit", fmt="conversational", posts=posts, comments=comments)
+    assert "## Post: What's the best book?" in out
+    assert "### Comment by bob (3 points)" in out
+    # Conversational metadata line.
+    assert "*r/AskReddit — by alice — 42 points, 7 comments*" in out
+    # No legacy markers.
+    assert "[POST p1]" not in out
+    assert "[COMMENT c1]" not in out
+
+
+def test_subreddit_conversational_handles_empty_selftext() -> None:
+    posts = [_post("p1", selftext="")]
+    out = format_corpus(mode="subreddit", fmt="conversational", posts=posts, comments=[])
+    assert "## Post:" in out
+    # Empty body shouldn't insert a blank "body:" placeholder.
+    assert "body:" not in out
+
+
+def test_search_conversational_adds_search_term_heading() -> None:
+    posts = [
+        _post("p1", search_term="vim", title="Vim tips", comments=[_comment("c1", "p1")]),
+        _post("p2", search_term="emacs", title="Emacs config"),
+    ]
+    out = format_corpus(mode="search", fmt="conversational", posts=posts)
+    assert "# Search term: vim" in out
+    assert "# Search term: emacs" in out
+    assert "## Post: Vim tips" in out
+    assert "## Post: Emacs config" in out
