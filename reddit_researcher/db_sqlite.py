@@ -6,6 +6,7 @@ queries. Schema is created on open. Foreign keys are enforced via PRAGMA.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -141,8 +142,37 @@ class SqliteRunSink:
             self.conn.commit()
 
     def upsert_run(self, run_dir: Path, manifest: dict[str, Any]) -> None:
-        # Filled in Task 3.
-        raise NotImplementedError
+        run_dir_str = str(run_dir.resolve())
+        subs = manifest.get("subreddits") or []
+        if manifest.get("mode") == "search":
+            scope = manifest.get("subreddit") or "all-reddit-search"
+        elif len(subs) == 1:
+            scope = subs[0]
+        elif subs:
+            from .storage import multi_subreddit_scope
+
+            scope = multi_subreddit_scope(subs)
+        else:
+            scope = manifest.get("subreddit") or "unknown"
+        self.conn.execute(
+            "INSERT OR REPLACE INTO runs ("
+            " run_dir, project_name, mode, scope, status, scraped_at_utc,"
+            " post_count, comment_count, schema_version, manifest_json, synced_at_utc"
+            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                run_dir_str,
+                manifest.get("project_name"),
+                manifest.get("mode", "unknown"),
+                scope,
+                manifest.get("status", "unknown"),
+                manifest.get("scraped_at_utc", ""),
+                int(manifest.get("post_count", 0)),
+                int(manifest.get("comment_count", 0)),
+                int(manifest.get("schema_version", 0)),
+                json.dumps(manifest, ensure_ascii=True),
+                datetime.now(UTC).isoformat(),
+            ),
+        )
 
     def insert_posts(self, run_dir: Path, posts: list[dict[str, Any]]) -> None:
         # Filled in Task 4.
@@ -157,8 +187,9 @@ class SqliteRunSink:
         raise NotImplementedError
 
     def delete_run(self, run_dir: Path) -> None:
-        # Filled in Task 3.
-        raise NotImplementedError
+        run_dir_str = str(run_dir.resolve())
+        # Cascade clears posts/comments/relevance_decisions via FK.
+        self.conn.execute("DELETE FROM runs WHERE run_dir = ?", (run_dir_str,))
 
     def read_only_connect(self) -> sqlite3.Connection:
         uri = f"file:{self.db_path}?mode=ro"
