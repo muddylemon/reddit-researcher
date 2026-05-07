@@ -418,3 +418,15 @@ def test_rebuild_drops_and_recreates(tmp_path: Path) -> None:
             ro.close()
     finally:
         sink.close()
+
+
+def test_make_sink_duckdb_not_installed(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """If `duckdb` import fails, make_sink raises DuckdbNotInstalled with install hint."""
+    import sys as _sys
+
+    # Force a fresh import of db_duckdb so its top-level `import duckdb` re-runs.
+    monkeypatch.delitem(_sys.modules, "reddit_researcher.db_duckdb", raising=False)
+    monkeypatch.setitem(_sys.modules, "duckdb", None)  # poisons future import duckdb
+    storage = StorageConfig(engine="duckdb", db_path=tmp_path / "r.duckdb")
+    with pytest.raises(DuckdbNotInstalled, match=r"pip install reddit-researcher\[duckdb\]"):
+        make_sink(storage, project_dir=tmp_path)

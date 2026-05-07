@@ -79,8 +79,13 @@ def make_sink(storage: StorageConfig, project_dir: Path) -> RunSink:
     if storage.engine == "duckdb":
         try:
             from .db_duckdb import DuckdbRunSink
-        except DuckdbNotInstalled:
-            raise
+        except ImportError as exc:
+            # `db_duckdb.py` doesn't exist or the bare `duckdb` package is missing.
+            raise DuckdbNotInstalled(
+                "The DuckDB sink requires the `duckdb` extra. Install it with:\n"
+                "  pip install reddit-researcher[duckdb]"
+            ) from exc
+        # `DuckdbNotInstalled` raised at db_duckdb's module top-level propagates as-is.
         return DuckdbRunSink(db_path)
     raise ValueError(f"unknown storage engine: {storage.engine!r}")
 
