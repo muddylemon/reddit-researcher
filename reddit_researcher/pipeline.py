@@ -448,9 +448,10 @@ def extract_from_run(
         manifest = normalize_manifest(json.loads(manifest_path.read_text(encoding="utf-8")))
 
     is_search = manifest.get("mode") == "search"
-    subreddit = manifest.get("subreddit") or "unknown"
+    subreddits_in_run = manifest.get("subreddits") or []
     scope_label = scope_label_for(
-        subreddit=None if is_search else subreddit,
+        subreddit=None if is_search else (subreddits_in_run[0] if len(subreddits_in_run) == 1 else None),
+        subreddits=None if is_search else (subreddits_in_run if len(subreddits_in_run) > 1 else None),
         search_terms=manifest.get("search_terms") if is_search else None,
     )
     logger = RunLogger(run_dir, log_name="extract.log")
