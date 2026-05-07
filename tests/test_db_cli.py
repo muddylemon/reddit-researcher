@@ -105,3 +105,16 @@ def test_db_sync_bad_run_dir_errors_cleanly(
     assert rc == 2
     err = capsys.readouterr().err
     assert "manifest.json" in err.lower() or "no manifest" in err.lower()
+
+
+def test_db_status_shows_engine_and_counts(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    project_dir, run_dir = _write_project_with_run(tmp_path)
+    cli_main(["db", "sync", str(run_dir), "--project", str(project_dir)])
+    rc = cli_main(["db", "status", "--project", str(project_dir)])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "sqlite" in out
+    assert "schema_version" in out
+    assert "posts" in out

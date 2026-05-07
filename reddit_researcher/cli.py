@@ -403,7 +403,7 @@ def _dispatch_db(args: argparse.Namespace, parser: argparse.ArgumentParser) -> i
     if args.db_command == "sync":
         return _db_sync(args, project, make_sink, sync_run, parser)
     if args.db_command == "status":
-        parser.error("db status: not implemented yet (Task 11)")
+        return _db_status(project, make_sink)
     if args.db_command == "query":
         parser.error("db query: not implemented yet (Task 12)")
     parser.error(f"Unsupported db command: {args.db_command}")
@@ -450,6 +450,41 @@ def _walk_run_dirs(output_root: Path) -> list[Path]:
     for manifest_path in output_root.rglob("manifest.json"):
         found.append(manifest_path.parent)
     return found
+
+
+def _db_status(project, make_sink) -> int:
+    sink = make_sink(project.storage, project_dir=project.project_dir)
+    try:
+        ro = sink.read_only_connect()
+        try:
+            schema_row = ro.execute(
+                "SELECT schema_version, created_at_utc, reddit_researcher_version FROM _schema_meta"
+            ).fetchone()
+            counts = {
+                table: ro.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+                for table in ("runs", "posts", "comments", "relevance_decisions")
+            }
+            recent = ro.execute(
+                "SELECT run_dir, mode, scope, status, post_count, comment_count "
+                "FROM runs ORDER BY synced_at_utc DESC LIMIT 10"
+            ).fetchall()
+        finally:
+            ro.close()
+    finally:
+        sink.close()
+
+    print(f"engine:           {project.storage.engine}")
+    print(f"db_path:          {project.storage.db_path}")
+    if schema_row:
+        print(f"schema_version:   {schema_row[0]} (created {schema_row[1]}, rr {schema_row[2]})")
+    print("row counts:")
+    for table, n in counts.items():
+        print(f"  {table:<22} {n}")
+    if recent:
+        print("recent runs:")
+        for run_dir, mode, scope, status, posts, comments in recent:
+            print(f"  [{mode}] {scope:<24} {status:<18} {posts}p {comments}c  {run_dir}")
+    return 0
 
 
 if __name__ == "__main__":
