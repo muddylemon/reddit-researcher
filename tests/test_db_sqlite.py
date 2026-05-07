@@ -20,6 +20,7 @@ from reddit_researcher.db import (
     sync_run,  # noqa: F401
 )
 from reddit_researcher.db_sqlite import SCHEMA_VERSION, SqliteRunSink  # noqa: F401
+from reddit_researcher.storage import append_jsonl
 
 
 def test_factory_returns_sqlite_sink_by_default(tmp_path: Path) -> None:
@@ -269,5 +270,114 @@ def test_insert_relevance_round_trips(tmp_path: Path) -> None:
         finally:
             ro.close()
         assert rows == [("p1", "include", "matches keyword"), ("p2", "exclude", "no match")]
+    finally:
+        sink.close()
+
+
+def _write_full_run(tmp_path: Path, *, scope: str = "AskReddit") -> Path:
+    """Create a run dir with one post, two comments, and two relevance decisions."""
+    run_dir = _make_run_dir(tmp_path, scope=scope)
+    posts_path = run_dir / "normalized" / "posts.jsonl"
+    comments_path = run_dir / "normalized" / "comments.jsonl"
+    review_path = run_dir / "review" / "relevance_review.jsonl"
+    review_path.parent.mkdir(parents=True, exist_ok=True)
+    append_jsonl(posts_path, _post_row("p1", scope))
+    append_jsonl(comments_path, _comment_row("c1", "p1"))
+    append_jsonl(comments_path, _comment_row("c2", "p1"))
+    append_jsonl(
+        review_path,
+        {"post_id": "p1", "subreddit": scope, "decision": "include", "reason": "ok"},
+    )
+    append_jsonl(
+        review_path,
+        {"post_id": "px", "subreddit": scope, "decision": "exclude", "reason": "off-topic"},
+    )
+    return run_dir
+
+
+def test_sync_run_round_trip(tmp_path: Path) -> None:
+    storage = StorageConfig(db_path=tmp_path / "r.db")
+    sink = make_sink(storage, project_dir=tmp_path)
+    try:
+        run_dir = _write_full_run(tmp_path)
+        result = sync_run(sink, run_dir)
+        assert result.posts == 1
+        assert result.comments == 2
+        assert result.relevance == 2
+        ro = sink.read_only_connect()
+        try:
+            assert ro.execute("SELECT COUNT(*) FROM runs").fetchone()[0] == 1
+            assert ro.execute("SELECT COUNT(*) FROM posts").fetchone()[0] == 1
+            assert ro.execute("SELECT COUNT(*) FROM comments").fetchone()[0] == 2
+            assert ro.execute("SELECT COUNT(*) FROM relevance_decisions").fetchone()[0] == 2
+        finally:
+            ro.close()
+    finally:
+        sink.close()
+
+
+def test_sync_run_idempotent(tmp_path: Path) -> None:
+    storage = StorageConfig(db_path=tmp_path / "r.db")
+    sink = make_sink(storage, project_dir=tmp_path)
+    try:
+        run_dir = _write_full_run(tmp_path)
+        sync_run(sink, run_dir)
+        sync_run(sink, run_dir)
+        ro = sink.read_only_connect()
+        try:
+            assert ro.execute("SELECT COUNT(*) FROM posts").fetchone()[0] == 1
+            assert ro.execute("SELECT COUNT(*) FROM comments").fetchone()[0] == 2
+        finally:
+            ro.close()
+    finally:
+        sink.close()
+
+
+def test_sync_run_reflects_jsonl_changes(tmp_path: Path) -> None:
+    storage = StorageConfig(db_path=tmp_path / "r.db")
+    sink = make_sink(storage, project_dir=tmp_path)
+    try:
+        run_dir = _write_full_run(tmp_path)
+        sync_run(sink, run_dir)
+        # Add another comment to the JSONL on disk.
+        append_jsonl(run_dir / "normalized" / "comments.jsonl", _comment_row("c3", "p1"))
+        sync_run(sink, run_dir)
+        ro = sink.read_only_connect()
+        try:
+            assert ro.execute("SELECT COUNT(*) FROM comments").fetchone()[0] == 3
+        finally:
+            ro.close()
+    finally:
+        sink.close()
+
+
+def test_delete_run_cascades_to_children(tmp_path: Path) -> None:
+    storage = StorageConfig(db_path=tmp_path / "r.db")
+    sink = make_sink(storage, project_dir=tmp_path)
+    try:
+        run_dir = _write_full_run(tmp_path)
+        sync_run(sink, run_dir)
+        with sink.transaction():
+            sink.delete_run(run_dir)
+        ro = sink.read_only_connect()
+        try:
+            assert ro.execute("SELECT COUNT(*) FROM runs").fetchone()[0] == 0
+            assert ro.execute("SELECT COUNT(*) FROM posts").fetchone()[0] == 0
+            assert ro.execute("SELECT COUNT(*) FROM comments").fetchone()[0] == 0
+            assert ro.execute("SELECT COUNT(*) FROM relevance_decisions").fetchone()[0] == 0
+        finally:
+            ro.close()
+    finally:
+        sink.close()
+
+
+def test_sync_run_missing_manifest_raises(tmp_path: Path) -> None:
+    storage = StorageConfig(db_path=tmp_path / "r.db")
+    sink = make_sink(storage, project_dir=tmp_path)
+    try:
+        run_dir = tmp_path / "runs" / "empty" / "20260507-120000"
+        run_dir.mkdir(parents=True)
+        with pytest.raises(FileNotFoundError, match="no manifest.json"):
+            sync_run(sink, run_dir)
     finally:
         sink.close()
