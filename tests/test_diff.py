@@ -323,3 +323,42 @@ def test_format_text_includes_relevance_changes(tmp_path: Path) -> None:
         assert "include -> exclude" in text or "include → exclude" in text
     finally:
         sink.close()
+
+
+def test_format_json_round_trip(tmp_path: Path) -> None:
+    storage = StorageConfig(db_path=tmp_path / "r.db")
+    sink = make_sink(storage, project_dir=tmp_path)
+    try:
+        run_a = _make_synced_run(
+            sink, tmp_path, scope="AskReddit", ts="20260507-120000",
+            posts=[_post_row("p1"), _post_row("p2")],
+            comments=[_comment_row("c1", "p1")],
+            decisions=[
+                {"post_id": "p1", "subreddit": "AskReddit", "decision": "include", "reason": "ok"},
+            ],
+        )
+        run_b = _make_synced_run(
+            sink, tmp_path, scope="AskReddit", ts="20260508-120000",
+            posts=[_post_row("p2"), _post_row("p3")],
+            comments=[_comment_row("c2", "p2")],
+            decisions=[
+                {"post_id": "p1", "subreddit": "AskReddit", "decision": "exclude", "reason": "rule"},
+            ],
+        )
+        result = compute_diff(sink, run_a, run_b)
+        payload = json.loads(format_json(result))
+        # All DiffResult fields present.
+        for key in (
+            "a", "b", "posts_only_in_a", "posts_only_in_b", "posts_in_both",
+            "comments_only_in_a", "comments_only_in_b", "comments_in_both",
+            "relevance_changes", "warnings",
+        ):
+            assert key in payload, f"missing key: {key}"
+        # Lists round-trip without truncation (unlike text).
+        assert payload["posts_only_in_a"] == ["p1"]
+        assert payload["posts_only_in_b"] == ["p3"]
+        assert payload["posts_in_both"] == ["p2"]
+        # Path serialized via default=str.
+        assert isinstance(payload["a"]["run_dir"], str)
+    finally:
+        sink.close()
