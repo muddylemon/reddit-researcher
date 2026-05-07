@@ -193,3 +193,59 @@ def test_compute_diff_relevance_changes(tmp_path: Path) -> None:
         assert changes_by_id["p3"]["b_decision"] == "include"
     finally:
         sink.close()
+
+
+def test_compute_diff_warns_on_mode_mismatch(tmp_path: Path) -> None:
+    storage = StorageConfig(db_path=tmp_path / "r.db")
+    sink = make_sink(storage, project_dir=tmp_path)
+    try:
+        run_a = _make_synced_run(
+            sink, tmp_path, scope="AskReddit", ts="20260507-120000", mode="subreddit",
+        )
+        run_b = _make_synced_run(
+            sink, tmp_path, scope="all-reddit-search", ts="20260508-120000", mode="search",
+        )
+        result = compute_diff(sink, run_a, run_b)
+        assert any("mode mismatch" in w for w in result.warnings)
+    finally:
+        sink.close()
+
+
+def test_compute_diff_warns_on_scope_mismatch(tmp_path: Path) -> None:
+    storage = StorageConfig(db_path=tmp_path / "r.db")
+    sink = make_sink(storage, project_dir=tmp_path)
+    try:
+        run_a = _make_synced_run(sink, tmp_path, scope="AskReddit", ts="20260507-120000")
+        run_b = _make_synced_run(sink, tmp_path, scope="worldnews", ts="20260508-120000")
+        result = compute_diff(sink, run_a, run_b)
+        assert any("scope mismatch" in w for w in result.warnings)
+    finally:
+        sink.close()
+
+
+def test_compute_diff_warns_on_project_mismatch(tmp_path: Path) -> None:
+    storage = StorageConfig(db_path=tmp_path / "r.db")
+    sink = make_sink(storage, project_dir=tmp_path)
+    try:
+        run_a = _make_synced_run(
+            sink, tmp_path, scope="AskReddit", ts="20260507-120000", project_name="alpha",
+        )
+        run_b = _make_synced_run(
+            sink, tmp_path, scope="AskReddit", ts="20260508-120000", project_name="beta",
+        )
+        result = compute_diff(sink, run_a, run_b)
+        assert any("project mismatch" in w for w in result.warnings)
+    finally:
+        sink.close()
+
+
+def test_compute_diff_no_warnings_when_runs_match(tmp_path: Path) -> None:
+    storage = StorageConfig(db_path=tmp_path / "r.db")
+    sink = make_sink(storage, project_dir=tmp_path)
+    try:
+        run_a = _make_synced_run(sink, tmp_path, scope="AskReddit", ts="20260507-120000")
+        run_b = _make_synced_run(sink, tmp_path, scope="AskReddit", ts="20260508-120000")
+        result = compute_diff(sink, run_a, run_b)
+        assert result.warnings == []
+    finally:
+        sink.close()

@@ -73,6 +73,7 @@ def compute_diff(sink: RunSink, run_a: Path, run_b: Path) -> DiffResult:
         _fill_posts(conn, a_str, b_str, result)
         _fill_comments(conn, a_str, b_str, result)
         _fill_relevance_changes(conn, a_str, b_str, result)
+        _fill_warnings(result)
         return result
     finally:
         conn.close()
@@ -114,6 +115,17 @@ def _fill_relevance_changes(conn: Any, a_str: str, b_str: str, result: DiffResul
     result.relevance_changes = [
         {"post_id": row[0], "a_decision": row[1], "b_decision": row[2]} for row in rows
     ]
+
+
+def _fill_warnings(result: DiffResult) -> None:
+    if result.a.mode != result.b.mode:
+        result.warnings.append(f"mode mismatch: A={result.a.mode}, B={result.b.mode}")
+    if result.a.scope != result.b.scope:
+        result.warnings.append(f"scope mismatch: A={result.a.scope}, B={result.b.scope}")
+    if result.a.project_name != result.b.project_name:
+        result.warnings.append(
+            f"project mismatch: A={result.a.project_name}, B={result.b.project_name}"
+        )
 
 
 def format_text(result: DiffResult) -> str:
