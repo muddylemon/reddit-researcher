@@ -71,6 +71,7 @@ def compute_diff(sink: RunSink, run_a: Path, run_b: Path) -> DiffResult:
         b = _summary_for(conn, run_b)
         result = DiffResult(a=a, b=b)
         _fill_posts(conn, a_str, b_str, result)
+        _fill_comments(conn, a_str, b_str, result)
         return result
     finally:
         conn.close()
@@ -86,6 +87,18 @@ def _fill_posts(conn: Any, a_str: str, b_str: str, result: DiffResult) -> None:
     result.posts_only_in_a = sorted(a_ids - b_ids)
     result.posts_only_in_b = sorted(b_ids - a_ids)
     result.posts_in_both = sorted(a_ids & b_ids)
+
+
+def _fill_comments(conn: Any, a_str: str, b_str: str, result: DiffResult) -> None:
+    a_ids = {row[0] for row in conn.execute(
+        "SELECT comment_id FROM comments WHERE run_dir = ?", (a_str,)
+    )}
+    b_ids = {row[0] for row in conn.execute(
+        "SELECT comment_id FROM comments WHERE run_dir = ?", (b_str,)
+    )}
+    result.comments_only_in_a = len(a_ids - b_ids)
+    result.comments_only_in_b = len(b_ids - a_ids)
+    result.comments_in_both = len(a_ids & b_ids)
 
 
 def format_text(result: DiffResult) -> str:

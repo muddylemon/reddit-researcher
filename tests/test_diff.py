@@ -137,3 +137,25 @@ def test_compute_diff_identical_post_sets(tmp_path: Path) -> None:
         assert sorted(result.posts_in_both) == ["p1", "p2"]
     finally:
         sink.close()
+
+
+def test_compute_diff_comments_set_counts(tmp_path: Path) -> None:
+    storage = StorageConfig(db_path=tmp_path / "r.db")
+    sink = make_sink(storage, project_dir=tmp_path)
+    try:
+        run_a = _make_synced_run(
+            sink, tmp_path, scope="AskReddit", ts="20260507-120000",
+            posts=[_post_row("p1")],
+            comments=[_comment_row("c1", "p1"), _comment_row("c2", "p1"), _comment_row("c3", "p1")],
+        )
+        run_b = _make_synced_run(
+            sink, tmp_path, scope="AskReddit", ts="20260508-120000",
+            posts=[_post_row("p1")],
+            comments=[_comment_row("c2", "p1"), _comment_row("c3", "p1"), _comment_row("c4", "p1")],
+        )
+        result = compute_diff(sink, run_a, run_b)
+        assert result.comments_only_in_a == 1   # c1
+        assert result.comments_only_in_b == 1   # c4
+        assert result.comments_in_both == 2     # c2, c3
+    finally:
+        sink.close()
