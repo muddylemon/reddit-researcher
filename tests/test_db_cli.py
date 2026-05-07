@@ -93,3 +93,15 @@ def test_db_sync_no_args_errors(tmp_path: Path, capsys: pytest.CaptureFixture[st
     assert rc == 2
     err = capsys.readouterr().err
     assert "run-dir" in err.lower() or "--all" in err.lower()
+
+
+def test_db_sync_bad_run_dir_errors_cleanly(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    project_dir, _ = _write_project_with_run(tmp_path)
+    bad_dir = tmp_path / "no-such-run"
+    bad_dir.mkdir()
+    rc = cli_main(["db", "sync", str(bad_dir), "--project", str(project_dir)])
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "manifest.json" in err.lower() or "no manifest" in err.lower()

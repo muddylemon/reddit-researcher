@@ -422,13 +422,19 @@ def _db_sync(args, project, make_sink, sync_run, parser) -> int:
                 else (project.output_root or DEFAULT_OUTPUT_ROOT)
             )
             run_dirs.extend(_walk_run_dirs(output_root))
+        # Dedup while preserving first-seen order. Idempotent sync_run still
+        # works without this, but it keeps the printed count accurate.
+        run_dirs = list(dict.fromkeys(p.resolve() for p in run_dirs))
         if not run_dirs:
             parser.error(
                 "db sync: pass one or more run directories, or --all with an output_root."
             )
         synced = 0
         for run_dir in run_dirs:
-            sync_run(sink, run_dir)
+            try:
+                sync_run(sink, run_dir)
+            except (FileNotFoundError, OSError) as exc:
+                parser.error(f"db sync: {exc}")
             synced += 1
         print(f"synced {synced} run dir(s) into {project.storage.db_path}")
         return 0
@@ -437,7 +443,7 @@ def _db_sync(args, project, make_sink, sync_run, parser) -> int:
 
 
 def _walk_run_dirs(output_root: Path) -> list[Path]:
-    """Yield every run dir under output_root that has a manifest.json."""
+    """Return every run dir under output_root that contains a manifest.json."""
     if not output_root.exists():
         return []
     found: list[Path] = []
