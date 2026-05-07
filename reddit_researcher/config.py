@@ -71,6 +71,12 @@ class AnalyzeConfig:
 
 @dataclass
 class StorageConfig:
+    """Database sink configuration.
+
+    `db_path` is resolved against the project dir during `load_project`. When
+    constructing this dataclass directly (e.g., in tests), pass an absolute path.
+    """
+
     engine: str = "sqlite"
     db_path: Path = field(default_factory=lambda: Path("research.db"))
     auto_sync: bool = True
@@ -275,7 +281,10 @@ def load_project(config_path: Path) -> ProjectConfig:
     storage_db_path_raw = storage_raw.get("db_path", "research.db")
     storage_db_path = _resolve_path(storage_db_path_raw, base_dir)
     if storage_db_path is None:
-        storage_db_path = (base_dir / "research.db").resolve()
+        raise ProjectConfigError(
+            "storage.db_path must not be empty.",
+            path=config_path,
+        )
     storage = StorageConfig(
         engine=storage_engine,
         db_path=storage_db_path,

@@ -221,11 +221,21 @@ def test_storage_engine_validated(tmp_path: Path) -> None:
     project_dir = tmp_path / "demo"
     project_dir.mkdir()
     (project_dir / "project.toml").write_text(
-        '[scrape]\nmode = "subreddit"\nsubreddit = "x"\n'
-        '[storage]\nengine = "postgres"\n',
+        '[scrape]\nmode = "subreddit"\nsubreddit = "x"\n[storage]\nengine = "postgres"\n',
         encoding="utf-8",
     )
     with pytest.raises(ProjectConfigError, match="invalid storage.engine"):
+        load_project(project_dir / "project.toml")
+
+
+def test_storage_db_path_empty_string_rejected(tmp_path: Path) -> None:
+    project_dir = tmp_path / "demo"
+    project_dir.mkdir()
+    (project_dir / "project.toml").write_text(
+        '[scrape]\nmode = "subreddit"\nsubreddit = "x"\n[storage]\ndb_path = ""\n',
+        encoding="utf-8",
+    )
+    with pytest.raises(ProjectConfigError, match="storage.db_path must not be empty"):
         load_project(project_dir / "project.toml")
 
 
