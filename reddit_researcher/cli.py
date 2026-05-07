@@ -489,7 +489,6 @@ def _db_status(project, make_sink) -> int:
 
 def _db_query(args, project, make_sink) -> int:
     import csv
-    import sqlite3
 
     sink = make_sink(project.storage, project_dir=project.project_dir)
     try:
@@ -497,8 +496,8 @@ def _db_query(args, project, make_sink) -> int:
         try:
             try:
                 cursor = ro.execute(args.sql)
-            except sqlite3.OperationalError as exc:
-                # Read-only mode in sqlite raises this for any write.
+            except Exception as exc:
+                # Read-only mode rejects writes; bad SQL also surfaces here.
                 print(f"error: {exc}", file=sys.stderr)
                 return 1
             cols = [d[0] for d in cursor.description] if cursor.description else []

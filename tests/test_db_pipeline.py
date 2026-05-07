@@ -102,6 +102,18 @@ def test_auto_sync_disabled_does_not_create_db(tmp_path: Path, patched_make_clie
     assert not (project.project_dir / "r.db").exists()
 
 
+def test_auto_sync_records_project_name(tmp_path: Path, patched_make_client: None) -> None:  # noqa: ARG001
+    project = _build_project(tmp_path, auto_sync=True)
+    run_project(project=project, output_root=tmp_path / "runs", skip_extract=True)
+    db_path = project.project_dir / "r.db"
+    conn = sqlite3.connect(db_path)
+    try:
+        names = conn.execute("SELECT project_name FROM runs").fetchall()
+    finally:
+        conn.close()
+    assert names == [("demo",)]
+
+
 def test_auto_sync_failure_does_not_fail_run(
     tmp_path: Path, patched_make_client: None, monkeypatch: pytest.MonkeyPatch  # noqa: ARG001
 ) -> None:
