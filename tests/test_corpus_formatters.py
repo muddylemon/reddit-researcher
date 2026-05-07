@@ -174,3 +174,26 @@ def test_structured_json_escapes_newlines_in_body() -> None:
     assert len(paragraphs) == 1
     obj = _json.loads(paragraphs[0])
     assert obj["body"] == "line one\n\nline two"  # round-trips
+
+
+@pytest.mark.parametrize("mode,fmt", [
+    ("subreddit", "compact"),
+    ("subreddit", "conversational"),
+    ("subreddit", "structured-json"),
+    ("search", "compact"),
+    ("search", "conversational"),
+    ("search", "structured-json"),
+])
+def test_format_output_has_no_trailing_newline(mode: str, fmt: str) -> None:
+    """All six formatters return a string without a trailing newline."""
+    if mode == "subreddit":
+        out = format_corpus(
+            mode=mode, fmt=fmt,
+            posts=[_post("p1")], comments=[_comment("c1", "p1")],
+        )
+    else:
+        out = format_corpus(
+            mode=mode, fmt=fmt,
+            posts=[_post("p1", search_term="vim", comments=[_comment("c1", "p1")])],
+        )
+    assert not out.endswith("\n"), f"{mode}/{fmt} ends with newline"

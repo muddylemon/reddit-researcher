@@ -101,7 +101,7 @@ def _subreddit_conversational(posts: list[dict], comments: list[dict]) -> str:
             lines.append((comment.get("body") or "").strip())
         lines.append("")
 
-    return "\n".join(lines).strip() + "\n"
+    return "\n".join(lines).strip()
 
 
 def _subreddit_structured_json(posts: list[dict], comments: list[dict]) -> str:
@@ -192,7 +192,7 @@ def _search_conversational(posts: list[dict]) -> str:
             lines.append((comment.get("body") or "").strip())
         lines.append("")
 
-    return "\n".join(lines).strip() + "\n"
+    return "\n".join(lines).strip()
 
 
 def _search_structured_json(posts: list[dict]) -> str:
