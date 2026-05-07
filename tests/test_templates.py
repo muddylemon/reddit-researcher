@@ -21,7 +21,7 @@ def test_scaffold_subreddit_project_writes_expected_files(tmp_path: Path) -> Non
 
     project = load_project(find_project_config(project_dir))
     assert project.scrape.mode == "subreddit"
-    assert project.scrape.subreddit == "Supplements"
+    assert project.scrape.subreddits == ["Supplements"]
     assert project.analyze.model == "qwen3:8b"
     assert project.analyze.prompt_file == (project_dir / "prompt.md").resolve()
 

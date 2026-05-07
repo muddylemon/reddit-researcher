@@ -37,7 +37,7 @@ def test_load_subreddit_project(tmp_path: Path) -> None:
 
     assert project.name == "demo"
     assert project.scrape.mode == "subreddit"
-    assert project.scrape.subreddit == "Supplements"
+    assert project.scrape.subreddits == ["Supplements"]
     assert project.scrape.post_limit == 5
     assert project.analyze.model == "qwen3:8b"
     assert project.analyze.prompt_file == (tmp_path / "prompt.md").resolve()
@@ -133,3 +133,69 @@ def test_find_project_config_accepts_dir(tmp_path: Path) -> None:
 def test_find_project_config_missing(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError):
         find_project_config(tmp_path / "missing")
+
+
+def test_subreddits_plural_only(tmp_path: Path) -> None:
+    config_path = _write_project(
+        tmp_path,
+        """
+        [scrape]
+        mode = "subreddit"
+        subreddits = ["cannabis", "marijuana", "drugs"]
+        """,
+    )
+    project = load_project(config_path)
+    assert project.scrape.subreddits == ["cannabis", "marijuana", "drugs"]
+
+
+def test_subreddit_and_subreddits_both_set_rejected(tmp_path: Path) -> None:
+    config_path = _write_project(
+        tmp_path,
+        """
+        [scrape]
+        mode = "subreddit"
+        subreddit = "x"
+        subreddits = ["y", "z"]
+        """,
+    )
+    with pytest.raises(ValueError, match="not both"):
+        load_project(config_path)
+
+
+def test_subreddits_empty_list_rejected(tmp_path: Path) -> None:
+    config_path = _write_project(
+        tmp_path,
+        """
+        [scrape]
+        mode = "subreddit"
+        subreddits = []
+        """,
+    )
+    with pytest.raises(ValueError, match="requires scrape.subreddit"):
+        load_project(config_path)
+
+
+def test_subreddits_dedup_case_insensitive(tmp_path: Path) -> None:
+    config_path = _write_project(
+        tmp_path,
+        """
+        [scrape]
+        mode = "subreddit"
+        subreddits = ["Cannabis", "cannabis", "Drugs", "DRUGS", "Marijuana"]
+        """,
+    )
+    project = load_project(config_path)
+    assert project.scrape.subreddits == ["Cannabis", "Drugs", "Marijuana"]
+
+
+def test_subreddits_invalid_entry_rejected(tmp_path: Path) -> None:
+    config_path = _write_project(
+        tmp_path,
+        """
+        [scrape]
+        mode = "subreddit"
+        subreddits = ["valid", "has whitespace"]
+        """,
+    )
+    with pytest.raises(ValueError, match="invalid subreddit name"):
+        load_project(config_path)

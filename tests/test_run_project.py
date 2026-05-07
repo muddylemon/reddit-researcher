@@ -22,7 +22,7 @@ def _make_project(*, mode: str, prompt_file: Path | None, tmp_path: Path) -> Pro
         project_dir=tmp_path,
         scrape=ScrapeConfig(
             mode=mode,
-            subreddit="Programming" if mode == "subreddit" else None,
+            subreddits=["Programming"] if mode == "subreddit" else [],
             terms_file=tmp_path / "terms.txt" if mode == "search" else None,
         ),
         analyze=AnalyzeConfig(prompt_file=prompt_file),

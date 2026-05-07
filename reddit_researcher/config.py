@@ -44,7 +44,7 @@ def _default_user_agent() -> str:
 class ScrapeConfig:
     mode: str = "subreddit"
     backend: str = "json"
-    subreddit: str | None = None
+    subreddits: list[str] = field(default_factory=list)
     terms_file: Path | None = None
     subreddits_file: Path | None = None
     exact_phrase: bool = True
@@ -146,10 +146,45 @@ def load_project(config_path: Path) -> ProjectConfig:
             path=config_path,
         )
 
+    raw_singular = scrape_raw.get("subreddit")
+    raw_plural = scrape_raw.get("subreddits")
+    if raw_singular is not None and raw_plural is not None:
+        raise ProjectConfigError(
+            "scrape.subreddit and scrape.subreddits cannot both be set; choose one (not both).",
+            path=config_path,
+        )
+
+    subreddits_list: list[str] = []
+    if raw_plural is not None:
+        if not isinstance(raw_plural, list):
+            raise ProjectConfigError(
+                "scrape.subreddits must be a list of subreddit names.",
+                path=config_path,
+            )
+        seen_lower: set[str] = set()
+        for item in raw_plural:
+            if not isinstance(item, str) or not item.strip() or "/" in item or any(ch.isspace() for ch in item):
+                raise ProjectConfigError(
+                    f"invalid subreddit name in scrape.subreddits: {item!r}",
+                    path=config_path,
+                )
+            lowered = item.casefold()
+            if lowered in seen_lower:
+                continue
+            seen_lower.add(lowered)
+            subreddits_list.append(item)
+    elif raw_singular is not None:
+        if not isinstance(raw_singular, str) or not raw_singular.strip() or "/" in raw_singular or any(ch.isspace() for ch in raw_singular):
+            raise ProjectConfigError(
+                f"invalid subreddit name in scrape.subreddit: {raw_singular!r}",
+                path=config_path,
+            )
+        subreddits_list = [raw_singular]
+
     scrape = ScrapeConfig(
         mode=mode,
         backend=backend,
-        subreddit=scrape_raw.get("subreddit"),
+        subreddits=subreddits_list,
         terms_file=_resolve_path(scrape_raw.get("terms_file"), base_dir),
         subreddits_file=_resolve_path(scrape_raw.get("subreddits_file"), base_dir),
         exact_phrase=bool(scrape_raw.get("exact_phrase", True)),
@@ -162,9 +197,9 @@ def load_project(config_path: Path) -> ProjectConfig:
         user_agent=scrape_raw.get("user_agent", _default_user_agent()),
     )
 
-    if mode == "subreddit" and not scrape.subreddit:
+    if mode == "subreddit" and not scrape.subreddits:
         raise ProjectConfigError(
-            "scrape.mode='subreddit' requires scrape.subreddit to be set.",
+            "scrape.mode='subreddit' requires scrape.subreddit (or scrape.subreddits) to be set.",
             path=config_path,
         )
     if mode == "search" and not scrape.terms_file:

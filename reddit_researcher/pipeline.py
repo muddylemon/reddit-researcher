@@ -479,7 +479,7 @@ def run_project(
     """Run a project end-to-end: scrape according to mode, then extract."""
     if project.scrape.mode == "subreddit":
         scrape_dir = scrape_subreddit(
-            subreddit=project.scrape.subreddit or "",
+            subreddit=project.scrape.subreddits[0],
             output_root=output_root,
             scrape=project.scrape,
             relevance=project.relevance,

@@ -80,7 +80,7 @@ def test_subreddit_scrape_writes_versioned_manifest(monkeypatch, tmp_path: Path)
     run_dir = pipeline.scrape_subreddit(
         subreddit="testsub",
         output_root=tmp_path,
-        scrape=ScrapeConfig(mode="subreddit", subreddit="testsub", post_limit=2, comment_limit=2),
+        scrape=ScrapeConfig(mode="subreddit", subreddits=["testsub"], post_limit=2, comment_limit=2),
     )
 
     manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
@@ -98,7 +98,7 @@ def test_subreddit_scrape_resumes_from_existing_run(monkeypatch, tmp_path: Path)
     initial_run = pipeline.scrape_subreddit(
         subreddit="testsub",
         output_root=tmp_path,
-        scrape=ScrapeConfig(mode="subreddit", subreddit="testsub", post_limit=2, comment_limit=1),
+        scrape=ScrapeConfig(mode="subreddit", subreddits=["testsub"], post_limit=2, comment_limit=1),
     )
     posts_path = initial_run / "normalized" / "posts.jsonl"
     assert posts_path.read_text(encoding="utf-8").count("\n") == 2
@@ -108,7 +108,7 @@ def test_subreddit_scrape_resumes_from_existing_run(monkeypatch, tmp_path: Path)
     resumed = pipeline.scrape_subreddit(
         subreddit="testsub",
         output_root=tmp_path,
-        scrape=ScrapeConfig(mode="subreddit", subreddit="testsub", post_limit=3, comment_limit=1),
+        scrape=ScrapeConfig(mode="subreddit", subreddits=["testsub"], post_limit=3, comment_limit=1),
         run_dir=initial_run,
     )
     assert resumed == initial_run

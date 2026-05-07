@@ -56,7 +56,8 @@ def list_projects(projects_dir: Path) -> str:
             rows.append([entry.name, "ERROR", str(exc)[:60], ""])
             continue
         if project.scrape.mode == "subreddit":
-            scope = f"r/{project.scrape.subreddit}"
+            subs = project.scrape.subreddits
+            scope = f"r/{subs[0]}" if len(subs) == 1 else f"{len(subs)} subs: " + ", ".join(f"r/{s}" for s in subs)
         else:
             scope = "search"
             if project.scrape.terms_file:
@@ -136,7 +137,13 @@ def summarize_run(run_dir: Path) -> str:
             scope += f", {len(subs)} subs"
         scope += ")"
     else:
-        scope = f"r/{manifest.get('subreddit', '?')}"
+        subs = manifest.get("subreddits") or ([manifest["subreddit"]] if manifest.get("subreddit") else [])
+        if not subs:
+            scope = "r/?"
+        elif len(subs) == 1:
+            scope = f"r/{subs[0]}"
+        else:
+            scope = f"{len(subs)} subs (" + ", ".join(f"r/{s}" for s in subs) + ")"
     lines.append(f"Mode:    {mode}    scope: {scope}    status: {status}")
 
     sort = manifest.get("sort", "?")
