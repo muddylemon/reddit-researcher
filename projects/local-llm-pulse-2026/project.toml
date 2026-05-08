@@ -1,0 +1,29 @@
+# Pulse of the local-LLM community in May 2026.
+# Multi-subreddit subreddit-mode run that fans out across the three biggest
+# self-host / local-inference communities and asks the model to summarize the
+# state of the conversation: which models people are running, what hardware
+# they're on, and what's currently broken.
+#
+# Run with: reddit-researcher run projects/local-llm-pulse-2026
+
+name = "local-llm-pulse-2026"
+description = "Pulse of the local-LLM community in May 2026: models, hardware, pain points."
+
+[scrape]
+mode = "subreddit"
+# Multi-subreddit subreddit mode (0.2.0). post_limit is per-subreddit, so this
+# yields ~24 posts in one combined run dir.
+subreddits = ["LocalLLaMA", "Ollama", "LocalLLM"]
+sort = "top"
+time_filter = "month"
+post_limit = 8
+comment_limit = 8
+pause_seconds = 1.5
+max_retries = 5
+
+[analyze]
+model = "qwen3:8b"
+prompt_file = "prompt.md"
+chunk_char_limit = 12000
+ollama_timeout_seconds = 600
+corpus_format = "compact"
