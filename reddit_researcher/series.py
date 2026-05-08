@@ -144,6 +144,19 @@ def compute_series(
             churn.sort(key=lambda pair: (-pair[1], pair[0]))
             result.churn_top = churn[:10]
 
+        # Warnings: detect mode or scope changes between consecutive runs.
+        for prev, curr in zip(result.runs, result.runs[1:], strict=False):
+            if prev.mode != curr.mode:
+                result.warnings.append(
+                    f"mode change between {prev.timestamp} and {curr.timestamp}: "
+                    f"{prev.mode} -> {curr.mode}"
+                )
+            if prev.scope != curr.scope:
+                result.warnings.append(
+                    f"scope change between {prev.timestamp} and {curr.timestamp}: "
+                    f"{prev.scope} -> {curr.scope}"
+                )
+
         return result
     finally:
         conn.close()

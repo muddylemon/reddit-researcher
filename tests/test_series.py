@@ -204,3 +204,37 @@ def test_compute_series_per_search_term_breakdown(tmp_path: Path) -> None:
         assert result.runs[0].per_search_term == {"silksong": 2, "gta vi": 1}
     finally:
         sink.close()
+
+
+def test_compute_series_warns_on_mode_change(tmp_path: Path) -> None:
+    storage = StorageConfig(db_path=tmp_path / "r.db")
+    sink = make_sink(storage, project_dir=tmp_path)
+    try:
+        _make_synced_run(
+            sink, tmp_path, scope="AskReddit", ts="20260506-120000", mode="subreddit",
+            project_name="demo",
+        )
+        _make_synced_run(
+            sink, tmp_path, scope="all-reddit-search", ts="20260507-120000", mode="search",
+            project_name="demo",
+        )
+        result = compute_series(sink, project_name="demo")
+        assert any("mode change" in w for w in result.warnings)
+    finally:
+        sink.close()
+
+
+def test_compute_series_warns_on_scope_change(tmp_path: Path) -> None:
+    storage = StorageConfig(db_path=tmp_path / "r.db")
+    sink = make_sink(storage, project_dir=tmp_path)
+    try:
+        _make_synced_run(
+            sink, tmp_path, scope="trees", ts="20260506-120000", project_name="demo",
+        )
+        _make_synced_run(
+            sink, tmp_path, scope="MOCannabis", ts="20260507-120000", project_name="demo",
+        )
+        result = compute_series(sink, project_name="demo")
+        assert any("scope change" in w for w in result.warnings)
+    finally:
+        sink.close()
