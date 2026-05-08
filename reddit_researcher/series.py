@@ -177,7 +177,7 @@ _TITLE_TRUNC = 80
 
 
 def _truncate(text: str, n: int) -> str:
-    return text if len(text) <= n else text[: n - 1] + "…"
+    return text if len(text) <= n else text[: n - 3] + "..."
 
 
 def _format_text_table(headers: list[str], rows: list[list[str]]) -> str:

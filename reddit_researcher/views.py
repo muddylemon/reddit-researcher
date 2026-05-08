@@ -19,7 +19,7 @@ from .manifest import MANIFEST_SCHEMA_VERSION, normalize_manifest, read_schema_v
 def _truncate(value: str, limit: int) -> str:
     if len(value) <= limit:
         return value
-    return value[: max(0, limit - 1)] + "…"
+    return value[: max(0, limit - 3)] + "..."
 
 
 def _format_table(rows: list[list[str]], headers: list[str]) -> str:

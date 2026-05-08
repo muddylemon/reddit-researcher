@@ -86,3 +86,8 @@ explicitly — partial runs are easy to miss.
   project.toml (try 2–3) and resume into the same run dir.
 - **Hours-long runs that produce nothing useful** — the prompt is the problem 90% of the time.
   Use the `design-research-project` skill to revise it.
+- **Final report cites author handles instead of post IDs.** The project is using
+  `corpus_format = "conversational"` on a small (~8B) local model — the model substitutes
+  the most-prominent identifier-shaped token in the prose framing. Either re-run with
+  `--corpus-format compact`, or stick with `compact` in `project.toml` for any
+  citation-heavy prompt at this model scale.
