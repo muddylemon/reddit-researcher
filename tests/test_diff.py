@@ -505,3 +505,60 @@ def test_cli_diff_warnings_to_stderr(
     captured = capsys.readouterr()
     assert "warning:" in captured.err.lower()
     assert "scope mismatch" in captured.err.lower()
+
+
+def test_cli_diff_autodiscovers_project_from_run_manifest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+) -> None:
+    """`diff` without --project resolves the project via manifest.project_name."""
+    from reddit_researcher import cli as _cli
+
+    projects_dir = tmp_path / "projects"
+    project_dir = projects_dir / "demo"
+    project_dir.mkdir(parents=True)
+    (project_dir / "project.toml").write_text(
+        '[scrape]\nmode = "subreddit"\nsubreddit = "AskReddit"\n'
+        '[storage]\ndb_path = "r.db"\nauto_sync = false\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(_cli, "DEFAULT_PROJECTS_ROOT", projects_dir)
+
+    run_a = _write_run_jsonl_only(
+        tmp_path, scope="AskReddit", ts="20260507-120000",
+        posts=[_post_row("p1")], project_name="demo",
+    )
+    run_b = _write_run_jsonl_only(
+        tmp_path, scope="AskReddit", ts="20260508-120000",
+        posts=[_post_row("p1")], project_name="demo",
+    )
+
+    rc = cli_main(["diff", str(run_a), str(run_b)])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "Diff: A vs B" in out
+
+
+def test_cli_diff_no_project_no_manifest_match_errors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+) -> None:
+    """No --project, no resolvable project_name, no cwd/project.toml → error."""
+    from reddit_researcher import cli as _cli
+
+    empty_projects = tmp_path / "projects"
+    empty_projects.mkdir()
+    monkeypatch.setattr(_cli, "DEFAULT_PROJECTS_ROOT", empty_projects)
+    monkeypatch.chdir(tmp_path)  # ensure no cwd project.toml
+
+    run_a = _write_run_jsonl_only(
+        tmp_path, scope="AskReddit", ts="20260507-120000",
+        posts=[_post_row("p1")], project_name=None,
+    )
+    run_b = _write_run_jsonl_only(
+        tmp_path, scope="AskReddit", ts="20260508-120000",
+        posts=[_post_row("p1")], project_name=None,
+    )
+
+    rc = cli_main(["diff", str(run_a), str(run_b)])
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "diff:" in err.lower()

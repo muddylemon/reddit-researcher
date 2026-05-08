@@ -4,6 +4,22 @@ All notable changes to Reddit Researcher are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Project auto-discovery for `extract` and `diff`.** Both subcommands now
+  resolve the project from `manifest.project_name` in the run dir (looking
+  up `projects/<project_name>/project.toml`). `extract <run-dir>` no longer
+  requires `--prompt-file` for runs produced by `run`; `diff <run-a> <run-b>`
+  no longer requires `--project` when both runs carry a resolvable project
+  name. Explicit flags still win, and runs produced by ad-hoc `scrape` /
+  `search` (no project) error with a helpful message.
+
+### Fixed
+- `list` and `series` no longer print a U+FFFD replacement character (`?`/`�`)
+  for the truncation marker on Windows PowerShell. Swapped the U+2026
+  HORIZONTAL ELLIPSIS for ASCII `...`.
+
 ## [0.2.1-beta] — 2026-05-08
 
 Closes the last open item in the `0.2.0` milestone — time-series mode.

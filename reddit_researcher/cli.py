@@ -89,7 +89,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Run Ollama analysis over an existing run folder.",
     )
     extract_parser.add_argument("run_dir", help="Path to an existing run directory.")
-    _add_analyze_overrides(extract_parser, require_prompt=True)
+    _add_analyze_overrides(extract_parser, require_prompt=False)
 
     init_parser = subparsers.add_parser(
         "init",
@@ -306,6 +306,29 @@ def _resolve_output_root(project: ProjectConfig, override: str | None) -> Path:
     return DEFAULT_OUTPUT_ROOT
 
 
+def _resolve_project_from_run(run_dir: Path, projects_dir: Path) -> Path | None:
+    """Best-effort: find the project.toml that produced `run_dir`.
+
+    Reads `run_dir/manifest.json`'s `project_name` field and looks for
+    `<projects_dir>/<project_name>/project.toml`. Returns the path if
+    found, None otherwise — caller decides what to do (default values,
+    error, fall back to other discovery paths). Cheap; safe to call
+    speculatively.
+    """
+    manifest_path = run_dir / "manifest.json"
+    if not manifest_path.is_file():
+        return None
+    try:
+        data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    project_name = data.get("project_name")
+    if not project_name:
+        return None
+    candidate = projects_dir / str(project_name) / "project.toml"
+    return candidate if candidate.is_file() else None
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -369,8 +392,21 @@ def _dispatch(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
         return 0
 
     if args.command == "extract":
-        analyze_cfg = _apply_analyze_overrides(AnalyzeConfig(), args)
-        final_path = extract_from_run(run_dir=Path(args.run_dir), analyze=analyze_cfg)
+        run_dir = Path(args.run_dir)
+        base = AnalyzeConfig()
+        if not getattr(args, "prompt_file", None):
+            project_path = _resolve_project_from_run(run_dir, DEFAULT_PROJECTS_ROOT)
+            if project_path is not None:
+                project = load_project(project_path)
+                base = project.analyze
+                load_dotenvs_for(project_dir=project.project_dir, repo_root=REPO_ROOT)
+            else:
+                parser.error(
+                    "extract: --prompt-file is required when the run dir's manifest "
+                    "has no project_name (or projects/<project_name>/project.toml is missing)."
+                )
+        analyze_cfg = _apply_analyze_overrides(base, args)
+        final_path = extract_from_run(run_dir=run_dir, analyze=analyze_cfg)
         print(final_path)
         return 0
 
@@ -469,12 +505,19 @@ def _dispatch_diff(args: argparse.Namespace, parser: argparse.ArgumentParser) ->
 
     project_arg = getattr(args, "project", None)
     if project_arg is None:
-        candidate = Path.cwd() / "project.toml"
-        if not candidate.exists():
-            parser.error(
-                "diff: pass --project <path> or run from a directory containing project.toml."
-            )
-        project_path = candidate
+        project_path = (
+            _resolve_project_from_run(run_a, DEFAULT_PROJECTS_ROOT)
+            or _resolve_project_from_run(run_b, DEFAULT_PROJECTS_ROOT)
+        )
+        if project_path is None:
+            candidate = Path.cwd() / "project.toml"
+            if not candidate.exists():
+                parser.error(
+                    "diff: pass --project <path>, run from a project directory, or "
+                    "make sure the run dirs' manifests have a project_name resolvable "
+                    "under projects/."
+                )
+            project_path = candidate
     else:
         project_path = find_project_config(Path(project_arg))
     load_dotenvs_for(project_dir=project_path.parent, repo_root=REPO_ROOT)

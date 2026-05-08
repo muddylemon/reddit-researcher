@@ -243,3 +243,159 @@ def test_corpus_format_cli_override_none_falls_back_to_base() -> None:
     )
     result = _apply_analyze_overrides(base, args)
     assert result.corpus_format == "structured-json"
+
+
+# ---------------------------------------------------------------------------
+# Project auto-discovery from run-dir manifest
+# ---------------------------------------------------------------------------
+
+
+def _write_manifest(run_dir: Path, *, project_name: str | None) -> None:
+    run_dir.mkdir(parents=True, exist_ok=True)
+    manifest: dict[str, object] = {
+        "schema_version": 2, "mode": "subreddit", "status": "complete",
+        "subreddits": ["AskReddit"], "scraped_at_utc": "2026-05-07T12:00:00+00:00",
+        "post_count": 0, "comment_count": 0,
+    }
+    if project_name is not None:
+        manifest["project_name"] = project_name
+    (run_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+
+def _write_project_toml(project_dir: Path, *, name: str = "demo") -> None:
+    project_dir.mkdir(parents=True, exist_ok=True)
+    (project_dir / "project.toml").write_text(
+        f'name = "{name}"\n'
+        '[scrape]\nmode = "subreddit"\nsubreddit = "AskReddit"\n'
+        '[analyze]\nprompt_file = "prompt.md"\nmodel = "stub"\n'
+        '[storage]\ndb_path = "r.db"\nauto_sync = false\n',
+        encoding="utf-8",
+    )
+    (project_dir / "prompt.md").write_text("Summarize.", encoding="utf-8")
+
+
+def test_resolve_project_from_run_finds_match(tmp_path: Path) -> None:
+    from reddit_researcher.cli import _resolve_project_from_run
+
+    projects_dir = tmp_path / "projects"
+    _write_project_toml(projects_dir / "demo")
+    run_dir = tmp_path / "runs" / "AskReddit" / "20260507-120000"
+    _write_manifest(run_dir, project_name="demo")
+
+    resolved = _resolve_project_from_run(run_dir, projects_dir)
+    assert resolved == projects_dir / "demo" / "project.toml"
+
+
+def test_resolve_project_from_run_returns_none_without_project_name(tmp_path: Path) -> None:
+    from reddit_researcher.cli import _resolve_project_from_run
+
+    projects_dir = tmp_path / "projects"
+    projects_dir.mkdir()
+    run_dir = tmp_path / "runs" / "AskReddit" / "20260507-120000"
+    _write_manifest(run_dir, project_name=None)
+
+    assert _resolve_project_from_run(run_dir, projects_dir) is None
+
+
+def test_resolve_project_from_run_returns_none_when_project_missing(tmp_path: Path) -> None:
+    from reddit_researcher.cli import _resolve_project_from_run
+
+    projects_dir = tmp_path / "projects"
+    projects_dir.mkdir()
+    run_dir = tmp_path / "runs" / "AskReddit" / "20260507-120000"
+    _write_manifest(run_dir, project_name="missing")
+
+    assert _resolve_project_from_run(run_dir, projects_dir) is None
+
+
+def test_resolve_project_from_run_handles_corrupt_manifest(tmp_path: Path) -> None:
+    from reddit_researcher.cli import _resolve_project_from_run
+
+    projects_dir = tmp_path / "projects"
+    projects_dir.mkdir()
+    run_dir = tmp_path / "runs" / "AskReddit" / "20260507-120000"
+    run_dir.mkdir(parents=True)
+    (run_dir / "manifest.json").write_text("{not json", encoding="utf-8")
+
+    assert _resolve_project_from_run(run_dir, projects_dir) is None
+
+
+def test_extract_autodiscovers_prompt_from_project(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`extract <run-dir>` without --prompt-file resolves the project via manifest.project_name."""
+    projects_dir = tmp_path / "projects"
+    _write_project_toml(projects_dir / "demo")
+    run_dir = tmp_path / "runs" / "AskReddit" / "20260507-120000"
+    _write_manifest(run_dir, project_name="demo")
+
+    monkeypatch.setattr(cli, "DEFAULT_PROJECTS_ROOT", projects_dir)
+
+    captured: dict[str, object] = {}
+
+    def fake_extract(*, run_dir: Path, analyze) -> Path:
+        captured["run_dir"] = run_dir
+        captured["prompt_file"] = analyze.prompt_file
+        captured["model"] = analyze.model
+        return run_dir / "analysis" / "final.md"
+
+    monkeypatch.setattr(cli, "extract_from_run", fake_extract)
+
+    rc = cli.main(["extract", str(run_dir)])
+    assert rc == 0
+    # prompt_file resolves to the project's prompt.md (relative path resolved by load_project).
+    assert captured["prompt_file"] == projects_dir / "demo" / "prompt.md"
+    assert captured["model"] == "stub"
+
+
+def test_extract_errors_when_no_prompt_and_no_project(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+) -> None:
+    """No --prompt-file and no project_name in manifest → helpful error, no extract call."""
+    projects_dir = tmp_path / "projects"
+    projects_dir.mkdir()
+    run_dir = tmp_path / "runs" / "AskReddit" / "20260507-120000"
+    _write_manifest(run_dir, project_name=None)
+
+    monkeypatch.setattr(cli, "DEFAULT_PROJECTS_ROOT", projects_dir)
+
+    called = {"hit": False}
+
+    def fake_extract(*, run_dir: Path, analyze) -> Path:  # pragma: no cover - shouldn't run
+        called["hit"] = True
+        return run_dir
+
+    monkeypatch.setattr(cli, "extract_from_run", fake_extract)
+
+    rc = cli.main(["extract", str(run_dir)])
+    assert rc == 2
+    assert called["hit"] is False
+    err = capsys.readouterr().err
+    assert "--prompt-file is required" in err
+
+
+def test_extract_explicit_prompt_file_skips_autodiscovery(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """--prompt-file wins; even a stale/missing project_name is harmless."""
+    projects_dir = tmp_path / "projects"
+    projects_dir.mkdir()
+    run_dir = tmp_path / "runs" / "AskReddit" / "20260507-120000"
+    _write_manifest(run_dir, project_name="missing")
+
+    explicit_prompt = tmp_path / "explicit.md"
+    explicit_prompt.write_text("Different prompt.", encoding="utf-8")
+
+    monkeypatch.setattr(cli, "DEFAULT_PROJECTS_ROOT", projects_dir)
+
+    captured: dict[str, object] = {}
+
+    def fake_extract(*, run_dir: Path, analyze) -> Path:
+        captured["prompt_file"] = analyze.prompt_file
+        return run_dir
+
+    monkeypatch.setattr(cli, "extract_from_run", fake_extract)
+
+    rc = cli.main(["extract", str(run_dir), "--prompt-file", str(explicit_prompt)])
+    assert rc == 0
+    assert captured["prompt_file"] == explicit_prompt

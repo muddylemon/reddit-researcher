@@ -45,13 +45,14 @@ Read `runs/<scope>/<ts>/manifest.json` and `review/relevance_review.jsonl` befor
 ### Step 2 — Single-chunk extract
 
 ```bash
-reddit-researcher extract runs/<scope>/<ts> \
-  --prompt-file projects/<name>/prompt.md \
-  --chunk-limit 1 --force-reextract
+reddit-researcher extract runs/<scope>/<ts> --chunk-limit 1 --force-reextract
 ```
 
-Checks the prompt actually does something useful on real data. `--force-reextract` overwrites any
-previous chunk output.
+Checks the prompt actually does something useful on real data. `--force-reextract` overwrites
+any previous chunk output. The prompt, model, and other `[analyze]` settings are picked up
+from the project that produced the run dir (resolved via `manifest.project_name`); pass
+`--prompt-file` / `--model` to override or if the run was produced ad-hoc by the bare
+`scrape` / `search` subcommands.
 
 ### Step 3 — Full run
 

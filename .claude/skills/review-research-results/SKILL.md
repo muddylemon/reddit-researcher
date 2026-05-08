@@ -23,19 +23,21 @@ post. Half the value is calling out where the run failed or is suspect.
 
 ## Cross-run review
 
-For comparisons across runs of the same project, three commands help — each needs the
-project context, so pass `--project <project-path>` (or run from inside the project dir):
+For comparisons across runs of the same project:
 
 - `reddit-researcher review <run-dir>` — single-run summary; no project flag needed.
-- `reddit-researcher diff <run-a> <run-b> --project <path>` — set-membership diff (posts
-  only-in-A / only-in-B / in-both, comment counts, relevance flips). `--format json`
-  for piping.
-- `reddit-researcher series <project>` — per-project rollup over every synced run
-  (always-present posts, churn, per-sub matrix). Pure stats, no LLM call.
-- `reddit-researcher db query "<SQL>" --project <path>` — read-only SQL over the auto-
-  synced sink. Tables: `runs`, `posts`, `comments`, `relevance_decisions`. Composite
-  primary keys are `(run_dir, post_id)` for posts and `(run_dir, comment_id)` for
-  comments, so cross-run joins are straightforward.
+- `reddit-researcher diff <run-a> <run-b>` — set-membership diff (posts only-in-A /
+  only-in-B / in-both, comment counts, relevance flips). `--format json` for piping.
+  Auto-discovers the project from the run-dirs' `manifest.project_name` (looks for
+  `projects/<project_name>/project.toml`). Pass `--project <path>` to override or
+  if the run dirs predate the auto-discovery.
+- `reddit-researcher series <project-path>` — per-project rollup over every synced
+  run (always-present posts, churn, per-sub matrix). Pure stats, no LLM call.
+- `reddit-researcher db query "<SQL>" --project <path>` — read-only SQL over the
+  auto-synced sink. `--project` is required (the SQL itself doesn't reference a
+  run-dir, so there's nothing to auto-discover from). Tables: `runs`, `posts`,
+  `comments`, `relevance_decisions`. Composite primary keys are `(run_dir, post_id)`
+  for posts and `(run_dir, comment_id)` for comments, so cross-run joins work.
 
 ## What to report to the user
 
