@@ -14,6 +14,11 @@ All notable changes to Reddit Researcher are documented here. The format follows
   no longer requires `--project` when both runs carry a resolvable project
   name. Explicit flags still win, and runs produced by ad-hoc `scrape` /
   `search` (no project) error with a helpful message.
+- **`/setup` and `/tutorial` Claude Code skills.** `/setup` walks through a
+  pre-flight checklist (Python, venv, editable install, Ollama, model, optional
+  PRAW) with offer-to-fix per gap. `/tutorial` runs `projects/example-subreddit-faq`
+  end-to-end on a single chunk and points at next steps. Onboarding for a fresh
+  clone is now `/setup` → `/tutorial` → `/design-research-project`.
 
 ### Fixed
 - `list` and `series` no longer print a U+FFFD replacement character (`?`/`�`)
