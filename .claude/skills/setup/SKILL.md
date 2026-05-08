@@ -87,6 +87,50 @@ pattern `^version = `, glob `pyproject.toml`).
   .venv\Scripts\pip.exe install -e ".[dev]"
   ```
 
+### Check 5 — Ollama reachable
+
+Use the Bash tool: `curl -sf http://127.0.0.1:11434/api/tags`. Honor `$env:OLLAMA_URL`
+if set. A 0 exit code with a JSON body is ✓.
+
+- ✗ on connection refused / non-zero exit. Tell the user:
+
+  > Ollama isn't reachable at the URL above. Open a separate terminal and run
+  > `ollama serve`, then leave it running.
+
+  **Do not** spawn `ollama serve` from this skill — it's a long-lived process the
+  user should own.
+
+### Check 6 — At least one model pulled
+
+If Check 5 passed, parse the `models[]` array from the same `/api/tags` response.
+Empty list is ✗.
+
+- ✗ if no models. Offer:
+
+  ```powershell
+  ollama pull qwen3:8b
+  ```
+
+  Confirm explicitly before running — this is roughly a 5 GB download. If the user
+  balks, point at `docs/model-recommendations.md` for hardware-specific
+  alternatives. If Check 5 was ✗, Check 6 is unevaluable; print "skipped — Ollama
+  not reachable" and move on.
+
+### Check 7 — PRAW extras (conditional)
+
+Only run this check if at least one project uses PRAW. Use the Grep tool with
+`pattern = 'backend\s*=\s*"praw"'` and `glob = 'projects/*/project.toml'`. If no
+matches, **skip the check entirely** (no ✓ / ✗ printed).
+
+If matches exist:
+
+- Run `.venv\Scripts\pip.exe show praw`. ✗ if not installed; offer
+  `.venv\Scripts\pip.exe install -e ".[praw]"`.
+- Use the Read tool on `.env` (repo root) and the matched project's `.env`. Look
+  for `REDDIT_CLIENT_ID`. ✗ if absent in both. Point at the README's "Authenticated
+  scraping (PRAW backend)" section. **Do not write `.env` for the user** —
+  credentials are sensitive.
+
 ## Confirmation pattern
 
 (filled in by Task 4)
