@@ -80,16 +80,42 @@ Wait for the command to finish before continuing — on `qwen3:8b` this is rough
 
 ### Stage 4 — Read the output
 
-(filled in by Task 9)
+Use the Read tool on `runs/personalfinance/<ts>/analysis/final.md`. Summarize 2-3
+bullets from it (paraphrase, don't quote long passages). End with:
+
+> This is a single-chunk preview. Re-running extract without `--chunk-limit 1` will
+> produce the synthesized full report.
+
+If `final.md` is empty or contains only "No relevant posts selected for analysis.",
+that means the relevance filter rejected everything in the single chunk you ran.
+Tell the user that's expected behavior on a one-chunk slice and that running the
+full extract (Stage 5 pointer 1) will use more of the corpus.
 
 ### Stage 5 — Next steps
 
-(filled in by Task 9)
+Print these three pointers (substitute `<ts>` from Stage 2 in pointer 1):
+
+> 1. **Get the full report:** re-run extract without the chunk cap:
+>    `.venv\Scripts\reddit-researcher.exe extract runs/personalfinance/<ts> --force-reextract`
+> 2. **Try other shapes:** `projects/example-game-reception/` (search mode,
+>    comparative), `projects/example-tool-sentiment/` (search mode, dev subs), or
+>    `projects/example-product-research/` (search mode, review-heavy).
+> 3. **Start your own project:** invoke `/design-research-project`.
 
 ## Idempotency
 
-(filled in by Task 9)
+If the user runs this twice, Stage 2 produces a fresh timestamped run folder.
+That's fine — always use the path you just produced. `runs/` is gitignored, so
+nothing dirties the working tree.
 
 ## Anti-patterns
 
-(filled in by Task 9)
+- Cloning the example into `projects/local-tutorial/` to mutate `post_limit` /
+  `comment_limit`. The shipped example is already small enough; cloning adds
+  divergence from the README's quickstart.
+- Running the full extract (no `--chunk-limit 1`). On 8B models that's many
+  minutes per chunk × N chunks; the tutorial is sized for ~3 minutes total.
+- Suggesting fixes for a slow model run mid-tutorial. Slow inference is a topic
+  for `docs/model-recommendations.md`, not this skill.
+- Skipping Stage 5. The tutorial is a doorway; ending without next-step pointers
+  leaves the user stranded.
