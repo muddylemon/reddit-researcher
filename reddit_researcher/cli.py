@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -213,6 +214,27 @@ def build_parser() -> argparse.ArgumentParser:
         help="Output format (default text).",
     )
 
+    series_parser = subparsers.add_parser(
+        "series",
+        help="Generate a per-project trend rollup across runs.",
+    )
+    series_parser.add_argument(
+        "project",
+        help="Path to project.toml or its directory.",
+    )
+    series_parser.add_argument(
+        "--output-root", default=None,
+        help="Override where _series/ lives. Defaults to the project's output_root or ./runs.",
+    )
+    series_parser.add_argument(
+        "--limit", type=int, default=None,
+        help="Only include the most recent N runs.",
+    )
+    series_parser.add_argument(
+        "--format", default="md", choices=["md", "json", "both"],
+        help="Output format(s). 'both' writes series.md and series.json.",
+    )
+
     return parser
 
 
@@ -402,6 +424,9 @@ def _dispatch(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
     if args.command == "diff":
         return _dispatch_diff(args, parser)
 
+    if args.command == "series":
+        return _dispatch_series(args, parser)
+
     parser.error(f"Unsupported command: {args.command}")
     return 2
 
@@ -479,6 +504,81 @@ def _dispatch_diff(args: argparse.Namespace, parser: argparse.ArgumentParser) ->
     else:
         print(format_text(result), end="")
     return 0
+
+
+def _dispatch_series(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
+    from .db import make_sink, sync_run
+    from .series import compute_series, format_json, format_markdown
+    from .storage import timestamp_slug
+
+    project_path = find_project_config(Path(args.project))
+    load_dotenvs_for(project_dir=project_path.parent, repo_root=REPO_ROOT)
+    project = load_project(project_path)
+
+    output_root = (
+        Path(args.output_root) if args.output_root
+        else (project.output_root or DEFAULT_OUTPUT_ROOT)
+    )
+
+    sink = make_sink(project.storage, project_dir=project.project_dir)
+    try:
+        synced = _sync_stale_for_project(sink, sync_run, project.name, output_root)
+        result = compute_series(sink, project_name=project.name, limit=args.limit)
+    finally:
+        sink.close()
+
+    if not result.runs:
+        print(
+            f"error: no runs found for project '{project.name}'; run it at least once "
+            "before generating a series report.",
+            file=sys.stderr,
+        )
+        return 2
+
+    out_dir = output_root / "_series" / project.name / timestamp_slug()
+    out_dir.mkdir(parents=True, exist_ok=True)
+    if args.format in ("md", "both"):
+        (out_dir / "series.md").write_text(format_markdown(result), encoding="utf-8")
+    if args.format in ("json", "both"):
+        (out_dir / "series.json").write_text(format_json(result), encoding="utf-8")
+    for warning in result.warnings:
+        print(f"warning: {warning}", file=sys.stderr)
+    print(
+        f"series report: {len(result.runs)} runs, "
+        f"{len(result.always_present_post_ids)} always-present, "
+        f"synced {synced} new run(s); written to {out_dir}"
+    )
+    return 0
+
+
+def _sync_stale_for_project(sink, sync_run, project_name: str, output_root: Path) -> int:
+    """Sync any run dir under `output_root` whose project_name matches and is missing-or-stale.
+
+    Returns the count of runs synced. Skips dirs without a manifest.json or
+    whose manifest doesn't match the project name. Cheap to call before any
+    series query — the same pattern `diff` uses, generalized to one project.
+    """
+    if not output_root.exists():
+        return 0
+    synced = 0
+    for manifest_path in output_root.rglob("manifest.json"):
+        run_dir = manifest_path.parent
+        # Skip _series/ artifacts and anything else that isn't a real run dir.
+        if any(part == "_series" for part in run_dir.parts):
+            continue
+        try:
+            data = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if data.get("project_name") != project_name:
+            continue
+        if _needs_sync(sink, run_dir):
+            try:
+                sync_run(sink, run_dir)
+                synced += 1
+            except (FileNotFoundError, OSError):
+                continue
+    return synced
 
 
 def _needs_sync(sink, run_dir: Path) -> bool:
