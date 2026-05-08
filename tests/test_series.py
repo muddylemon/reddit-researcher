@@ -434,3 +434,76 @@ def test_cli_series_help_does_not_crash(capsys: pytest.CaptureFixture[str]) -> N
     assert "series" in out.lower()
     assert "--limit" in out
     assert "--format" in out
+
+
+def _write_project(tmp_path: Path) -> Path:
+    project_dir = tmp_path / "proj"
+    project_dir.mkdir()
+    (project_dir / "project.toml").write_text(
+        '[scrape]\nmode = "subreddit"\nsubreddit = "AskReddit"\n'
+        '[storage]\ndb_path = "r.db"\nauto_sync = false\n',
+        encoding="utf-8",
+    )
+    return project_dir
+
+
+def _write_run_jsonl_only(
+    tmp_path: Path, *, scope: str, ts: str, posts: list[dict],
+    project_name: str | None = "proj",
+) -> Path:
+    """Write a run dir to disk WITHOUT syncing."""
+    run_dir = tmp_path / "runs" / scope / ts
+    (run_dir / "normalized").mkdir(parents=True)
+    (run_dir / "review").mkdir(parents=True)
+    manifest = {
+        "schema_version": 2,
+        "mode": "subreddit",
+        "status": "complete",
+        "subreddits": [scope],
+        "scraped_at_utc": f"2026-05-07T{ts[-6:-4]}:00:00+00:00",
+        "post_count": len(posts),
+        "comment_count": 0,
+    }
+    if project_name is not None:
+        manifest["project_name"] = project_name
+    (run_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    for p in posts:
+        append_jsonl(run_dir / "normalized" / "posts.jsonl", p)
+    return run_dir
+
+
+def test_cli_series_auto_syncs_unsynced_run(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from reddit_researcher.cli import main as cli_main
+
+    project_dir = _write_project(tmp_path)
+    # Project name from project.toml is the directory name -> "proj".
+    _write_run_jsonl_only(
+        tmp_path, scope="AskReddit", ts="20260506-120000",
+        posts=[_post_row("p1"), _post_row("p2")], project_name="proj",
+    )
+    _write_run_jsonl_only(
+        tmp_path, scope="AskReddit", ts="20260507-120000",
+        posts=[_post_row("p2"), _post_row("p3")], project_name="proj",
+    )
+    rc = cli_main([
+        "series", str(project_dir), "--output-root", str(tmp_path / "runs"),
+        "--format", "both",
+    ])
+    assert rc == 0
+    series_root = tmp_path / "runs" / "_series" / "proj"
+    assert series_root.exists()
+    written = list(series_root.iterdir())
+    assert len(written) == 1, f"expected one timestamped dir, got {written}"
+    md = written[0] / "series.md"
+    js = written[0] / "series.json"
+    assert md.exists()
+    assert js.exists()
+    text = md.read_text(encoding="utf-8")
+    assert "Series: proj" in text
+    payload = json.loads(js.read_text(encoding="utf-8"))
+    assert payload["project_name"] == "proj"
+    assert sorted([r["timestamp"] for r in payload["runs"]]) == [
+        "20260506-120000", "20260507-120000",
+    ]
