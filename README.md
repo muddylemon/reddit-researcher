@@ -362,6 +362,11 @@ reddit-researcher run my-project --corpus-format structured-json
 If you use [Claude Code](https://claude.com/claude-code), this repo ships with skills under
 `.claude/skills/`:
 
+- **setup** — pre-flight check for a fresh clone: Python version, venv, editable
+  install, Ollama reachability, a pulled model. Offers to fix each gap one at a
+  time. Run via `/setup`.
+- **tutorial** — 3-minute end-to-end walkthrough of `projects/example-subreddit-faq`,
+  capped at one extract chunk. Run via `/tutorial` after `/setup`.
 - **design-research-project** — walks you through creating a new `projects/<name>/` folder
   with a `project.toml`, `prompt.md`, and any term/subreddit files you need.
 - **run-research-project** — runs an existing project and surfaces the manifest + final report.
