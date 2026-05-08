@@ -557,3 +557,23 @@ def test_cli_series_zero_runs_exits_2(
     assert rc == 2
     err = capsys.readouterr().err
     assert "no runs found" in err.lower()
+
+
+def test_compute_series_works_on_duckdb_engine(tmp_path: Path) -> None:
+    """Regression: ensure compute_series doesn't depend on sqlite-only cursor semantics."""
+    pytest.importorskip("duckdb")
+    storage = StorageConfig(engine="duckdb", db_path=tmp_path / "r.duckdb")
+    sink = make_sink(storage, project_dir=tmp_path)
+    try:
+        _make_synced_run(
+            sink, tmp_path, scope="AskReddit", ts="20260506-120000",
+            posts=[_post_row("p1"), _post_row("p2")], project_name="demo",
+        )
+        _make_synced_run(
+            sink, tmp_path, scope="AskReddit", ts="20260507-120000",
+            posts=[_post_row("p2")], project_name="demo",
+        )
+        result = compute_series(sink, project_name="demo")
+        assert result.always_present_post_ids == ["p2"]
+    finally:
+        sink.close()
