@@ -4,7 +4,7 @@ All notable changes to Reddit Researcher are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.1-beta] — 2026-05-07
+## [0.2.1-beta] — 2026-05-08
 
 Closes the last open item in the `0.2.0` milestone — time-series mode.
 
