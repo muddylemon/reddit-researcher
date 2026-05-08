@@ -135,3 +135,32 @@ def test_compute_series_new_and_carried_post_ids(tmp_path: Path) -> None:
         assert result.title_for["p5"] == "Title p5"
     finally:
         sink.close()
+
+
+def test_compute_series_always_present_and_churn(tmp_path: Path) -> None:
+    storage = StorageConfig(db_path=tmp_path / "r.db")
+    sink = make_sink(storage, project_dir=tmp_path)
+    try:
+        _make_synced_run(
+            sink, tmp_path, scope="AskReddit", ts="20260505-120000",
+            posts=[_post_row("p1"), _post_row("p2"), _post_row("p3")],
+            project_name="demo",
+        )
+        _make_synced_run(
+            sink, tmp_path, scope="AskReddit", ts="20260506-120000",
+            posts=[_post_row("p1"), _post_row("p2")],
+            project_name="demo",
+        )
+        _make_synced_run(
+            sink, tmp_path, scope="AskReddit", ts="20260507-120000",
+            posts=[_post_row("p1"), _post_row("p4")],
+            project_name="demo",
+        )
+        result = compute_series(sink, project_name="demo")
+        assert result.always_present_post_ids == ["p1"]
+        assert result.churn_top[0] == ("p2", 2)
+        assert ("p3", 1) in result.churn_top
+        assert ("p4", 1) in result.churn_top
+        assert all(post_id != "p1" for post_id, _ in result.churn_top)
+    finally:
+        sink.close()

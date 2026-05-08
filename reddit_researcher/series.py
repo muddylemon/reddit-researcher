@@ -111,6 +111,22 @@ def compute_series(
             )
             previous_ids = current_ids
         result.title_for = title_for
+
+        if per_run_post_ids:
+            total_runs = len(per_run_post_ids)
+            frequency: dict[str, int] = {}
+            for ids in per_run_post_ids.values():
+                for post_id in ids:
+                    frequency[post_id] = frequency.get(post_id, 0) + 1
+            result.always_present_post_ids = sorted(
+                pid for pid, count in frequency.items() if count == total_runs
+            )
+            churn = [
+                (pid, count) for pid, count in frequency.items() if count < total_runs
+            ]
+            churn.sort(key=lambda pair: (-pair[1], pair[0]))
+            result.churn_top = churn[:10]
+
         return result
     finally:
         conn.close()
