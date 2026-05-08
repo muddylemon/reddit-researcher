@@ -5,7 +5,7 @@
 # Swap `subreddit` for any community you want to study (cooking, woodworking,
 # parenting, AskHistorians, etc.) — the prompt is intentionally generic.
 
-name = "subreddit-faq"
+name = "example-subreddit-faq"
 description = "Recurring questions and misconceptions in a single subreddit."
 
 [scrape]

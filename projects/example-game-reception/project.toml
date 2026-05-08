@@ -4,7 +4,7 @@
 # Best showcase of comparative search-mode analysis. Swap the names in
 # terms.txt for any games you want to compare; the prompt is generic.
 
-name = "game-reception"
+name = "example-game-reception"
 description = "Compare how Reddit talks about a slate of video games."
 
 [scrape]

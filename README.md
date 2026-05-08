@@ -88,7 +88,7 @@ single file: `project.toml`.
 
 ```toml
 # projects/example-subreddit-faq/project.toml
-name = "subreddit-faq"
+name = "example-subreddit-faq"
 description = "Recurring questions and misconceptions in a single subreddit."
 
 [scrape]
@@ -136,7 +136,7 @@ A search-mode project looks like this:
 
 ```toml
 # projects/example-game-reception/project.toml
-name = "game-reception"
+name = "example-game-reception"
 description = "Compare how Reddit talks about a slate of video games."
 
 [scrape]

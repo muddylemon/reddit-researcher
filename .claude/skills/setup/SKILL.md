@@ -33,7 +33,7 @@ substitute:
 - `Test-Path <path>` → `test -e <path>`
 
 Print the POSIX-equivalent command and ask the user to run it themselves; do not
-auto-execute on POSIX in v1.
+auto-execute on POSIX until the skill has been exercised end-to-end on macOS / Linux.
 
 ## Pre-flight checks
 

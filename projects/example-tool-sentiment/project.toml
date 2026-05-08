@@ -4,7 +4,7 @@
 # Useful for: deciding whether to adopt a new tool, writing comparison posts,
 # or auditing how the community is talking about your project.
 
-name = "tool-sentiment"
+name = "example-tool-sentiment"
 description = "Compare how dev-focused subreddits talk about a slate of tools or frameworks."
 
 [scrape]

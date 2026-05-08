@@ -5,7 +5,7 @@
 # unfiltered first-person ownership reports. This template surfaces durability
 # patterns, common complaints, and "what to buy instead" recommendations.
 
-name = "product-research"
+name = "example-product-research"
 description = "Mine durability complaints, failure modes, and alternatives from review-heavy subreddits."
 
 [scrape]
