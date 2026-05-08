@@ -44,11 +44,39 @@ No command yet — this is context-setting only.
 
 ### Stage 2 — Scrape
 
-(filled in by Task 8)
+Run:
+
+```powershell
+.venv\Scripts\reddit-researcher.exe run projects/example-subreddit-faq --skip-extract
+```
+
+When it finishes:
+
+- Identify the run dir. It's printed in the command output as
+  `Run dir: runs/personalfinance/<ts>`. If you missed it, list the runs folder
+  with `Get-ChildItem runs/personalfinance | Sort-Object LastWriteTime -Descending |
+  Select-Object -First 1` and use that path. Hold onto `<ts>` for Stages 3 and 5.
+- Read `runs/personalfinance/<ts>/manifest.json` and surface post count, comment
+  count, and any `search_fetch_errors` / `comment_fetch_errors` from it. Use the
+  Read tool.
+- Read the first non-empty line of `runs/personalfinance/<ts>/normalized/posts.jsonl`
+  and print it (truncate to ~200 chars). One sentence: "this is what a normalized
+  post looks like — the LLM never sees the raw Reddit JSON."
 
 ### Stage 3 — Extract one chunk
 
-(filled in by Task 8)
+Run, substituting `<ts>` from Stage 2:
+
+```powershell
+.venv\Scripts\reddit-researcher.exe extract runs/personalfinance/<ts> --chunk-limit 1 --force-reextract
+```
+
+One sentence on what's happening: "chunking the corpus into ~12 000-character
+blocks and running the project's prompt over the first chunk only.
+`--force-reextract` makes this idempotent if you re-invoke the skill."
+
+Wait for the command to finish before continuing — on `qwen3:8b` this is roughly
+30-60 seconds.
 
 ### Stage 4 — Read the output
 
