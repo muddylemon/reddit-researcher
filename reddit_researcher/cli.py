@@ -308,10 +308,7 @@ def _resolve_output_root(project: ProjectConfig, override: str | None) -> Path:
 
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
-    try:
-        args = parser.parse_args(argv)
-    except SystemExit as exc:
-        return int(exc.code) if exc.code is not None else 0
+    args = parser.parse_args(argv)
 
     # Load .env files into os.environ as early as possible so config defaults
     # (which read OLLAMA_URL etc.) see them. The project's own .env, if any,

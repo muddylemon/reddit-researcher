@@ -427,9 +427,10 @@ def test_format_markdown_warnings_section(tmp_path: Path) -> None:
 def test_cli_series_help_does_not_crash(capsys: pytest.CaptureFixture[str]) -> None:
     from reddit_researcher.cli import main as cli_main
 
-    rc = cli_main(["series", "--help"])
-    # argparse `--help` exits with 0.
-    assert rc == 0
+    # argparse `--help` raises SystemExit(0); matches existing test_cli pattern.
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["series", "--help"])
+    assert exc_info.value.code == 0
     out = capsys.readouterr().out
     assert "series" in out.lower()
     assert "--limit" in out
