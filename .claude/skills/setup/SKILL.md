@@ -47,8 +47,9 @@ reported version and compare against `3.11`.
 
 ### Check 2 — `.venv\` exists at repo root
 
-Use the Read tool on `.venv\Scripts\python.exe`. A "file not found" error means the
-venv is missing.
+Use the PowerShell tool: `Test-Path ".venv\Scripts\python.exe"`. `True` = exists;
+`False` = venv is missing. (Do NOT use the Read tool — .exe files are binary and
+the Read tool will error on them.)
 
 - ✗ if missing. Offer:
 
@@ -61,8 +62,9 @@ venv is missing.
 
 ### Check 3 — `reddit-researcher` console script present
 
-Use the Read tool on `.venv\Scripts\reddit-researcher.exe`. A "file not found" error
-means the editable install hasn't run.
+Use the PowerShell tool: `Test-Path ".venv\Scripts\reddit-researcher.exe"`. `True` =
+present; `False` = editable install hasn't run. (Do NOT use the Read tool — .exe
+files are binary and the Read tool will error on them.)
 
 - ✗ if missing. Offer:
 
