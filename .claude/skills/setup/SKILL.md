@@ -133,8 +133,22 @@ If matches exist:
 
 ## Confirmation pattern
 
-(filled in by Task 4)
+For every ✗, the offer is: print the failing check, the exact command, then ask the
+user Y/N. A "no" on one fix doesn't block subsequent fixes — continue down the list
+and let the user fix the rest themselves later.
+
+After all confirmable fixes have been processed (run or declined), re-run the affected
+checks to confirm they now pass. Print a final ✓/✗ summary line per check.
 
 ## Anti-patterns
 
-(filled in by Task 4)
+- Running `pip install` or `ollama pull` without confirmation, even after a blanket
+  "yes fix everything" — every install is its own decision.
+- Editing the user's `.env`. Diagnose, point at docs, stop.
+- Spawning `ollama serve`. Long-lived processes belong to the user.
+- Recommending `qwen3:8b` on a machine with too little RAM. Don't try to read system
+  specs — surface `docs/model-recommendations.md` if the user pushes back.
+- Continuing past a ✗ Check 5 (Ollama unreachable) without flagging that Checks 6 and
+  7 can't be fully evaluated until it's fixed.
+- Auto-invoking `/tutorial` after setup completes. Print the offer line and stop;
+  let the user opt in.
