@@ -261,4 +261,46 @@ def format_markdown(result: SeriesResult) -> str:
             parts.append(f"  {pid}  {count}/{n}  {title}")
     parts.append("")
 
+    # Subreddit / term breakdown matrix
+    has_subs = any(r.per_subreddit for r in result.runs)
+    has_terms = any(r.per_search_term for r in result.runs)
+    if has_subs or has_terms:
+        if has_subs and not has_terms:
+            heading, key = "## Subreddit breakdown", "per_subreddit"
+        elif has_terms and not has_subs:
+            heading, key = "## Search-term breakdown", "per_search_term"
+        else:
+            heading, key = "## Subreddit / term breakdown", "per_subreddit"
+        parts.append(heading)
+        parts.append("")
+        # Pick rows: union of keys across runs, ranked by total count desc.
+        totals: dict[str, int] = {}
+        for r in result.runs:
+            source = getattr(r, key)
+            for k, v in source.items():
+                totals[k] = totals.get(k, 0) + v
+            if heading.endswith("breakdown") and key == "per_subreddit":
+                if has_terms:
+                    for k, v in r.per_search_term.items():
+                        totals[k] = totals.get(k, 0) + v
+        ranked = sorted(totals, key=lambda k: (-totals[k], k))[:_BREAKDOWN_ROW_CAP]
+        headers = ["key"] + [r.timestamp for r in result.runs]
+        rows = []
+        for label in ranked:
+            row = [label]
+            for r in result.runs:
+                count = r.per_subreddit.get(label, 0) + r.per_search_term.get(label, 0)
+                row.append(str(count))
+            rows.append(row)
+        parts.append(_format_text_table(headers, rows))
+        parts.append("")
+
+    # Warnings
+    if result.warnings:
+        parts.append("## Warnings")
+        parts.append("")
+        for w in result.warnings:
+            parts.append(f"- {w}")
+        parts.append("")
+
     return "\n".join(parts) + "\n"

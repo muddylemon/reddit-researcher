@@ -370,3 +370,55 @@ def test_format_markdown_persistence_section_for_single_run(tmp_path: Path) -> N
         assert "only one run" in md.lower()
     finally:
         sink.close()
+
+
+def test_format_markdown_breakdown_matrix(tmp_path: Path) -> None:
+    from reddit_researcher.series import format_markdown
+
+    storage = StorageConfig(db_path=tmp_path / "r.db")
+    sink = make_sink(storage, project_dir=tmp_path)
+    try:
+        _make_synced_run(
+            sink, tmp_path, scope="multi", ts="20260506-120000",
+            posts=[
+                _post_row("p1", subreddit="trees"),
+                _post_row("p2", subreddit="MOCannabis"),
+            ],
+            project_name="demo",
+        )
+        _make_synced_run(
+            sink, tmp_path, scope="multi", ts="20260507-120000",
+            posts=[
+                _post_row("p3", subreddit="trees"),
+                _post_row("p4", subreddit="trees"),
+                _post_row("p5", subreddit="MOCannabis"),
+            ],
+            project_name="demo",
+        )
+        result = compute_series(sink, project_name="demo")
+        md = format_markdown(result)
+        assert "## Subreddit breakdown" in md or "## Subreddit / term breakdown" in md
+        assert "trees" in md
+        assert "MOCannabis" in md
+    finally:
+        sink.close()
+
+
+def test_format_markdown_warnings_section(tmp_path: Path) -> None:
+    from reddit_researcher.series import format_markdown
+
+    storage = StorageConfig(db_path=tmp_path / "r.db")
+    sink = make_sink(storage, project_dir=tmp_path)
+    try:
+        _make_synced_run(
+            sink, tmp_path, scope="A", ts="20260506-120000", project_name="demo",
+        )
+        _make_synced_run(
+            sink, tmp_path, scope="B", ts="20260507-120000", project_name="demo",
+        )
+        result = compute_series(sink, project_name="demo")
+        md = format_markdown(result)
+        assert "## Warnings" in md
+        assert "scope change" in md
+    finally:
+        sink.close()
