@@ -169,3 +169,62 @@ def format_json(result: SeriesResult) -> str:
     which is the standard JSON round-trip behavior.
     """
     return json.dumps(asdict(result), default=str, ensure_ascii=True)
+
+
+_PERSISTENCE_CAP = 50
+_CHURN_CAP = 10
+_BREAKDOWN_ROW_CAP = 20
+_TITLE_TRUNC = 80
+
+
+def _truncate(text: str, n: int) -> str:
+    return text if len(text) <= n else text[: n - 1] + "…"
+
+
+def _format_text_table(headers: list[str], rows: list[list[str]]) -> str:
+    """Plain-text aligned table — no external deps. Matches the diff module's vibe."""
+    widths = [len(h) for h in headers]
+    for row in rows:
+        for i, cell in enumerate(row):
+            widths[i] = max(widths[i], len(cell))
+    lines = ["  ".join(h.ljust(w) for h, w in zip(headers, widths, strict=False))]
+    lines.append("  ".join("-" * w for w in widths))
+    for row in rows:
+        lines.append("  ".join(cell.ljust(w) for cell, w in zip(row, widths, strict=False)))
+    return "\n".join(lines)
+
+
+def format_markdown(result: SeriesResult) -> str:
+    """Render the SeriesResult as a human-readable Markdown report."""
+    parts: list[str] = []
+
+    # Header
+    n = len(result.runs)
+    if n == 0:
+        return f"# Series: {result.project_name}\n\nno runs found.\n"
+    first_ts = result.runs[0].scraped_at_utc
+    last_ts = result.runs[-1].scraped_at_utc
+    parts.append(f"# Series: {result.project_name}")
+    parts.append(f"{n} runs from {first_ts} to {last_ts}")
+    parts.append("")
+
+    # Run table
+    parts.append("## Runs")
+    parts.append("")
+    headers = ["run", "mode", "scope", "posts", "comments", "relevant", "new", "carried"]
+    rows: list[list[str]] = []
+    for i, r in enumerate(result.runs):
+        rows.append([
+            r.timestamp,
+            r.mode,
+            r.scope,
+            str(r.post_count),
+            str(r.comment_count),
+            str(r.relevant_count),
+            "-" if i == 0 else str(len(r.new_post_ids)),
+            "-" if i == 0 else str(len(r.carried_post_ids)),
+        ])
+    parts.append(_format_text_table(headers, rows))
+    parts.append("")
+
+    return "\n".join(parts) + "\n"
