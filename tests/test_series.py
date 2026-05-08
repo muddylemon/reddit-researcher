@@ -80,3 +80,23 @@ def test_compute_series_returns_seriesresult_for_one_run(tmp_path: Path) -> None
         assert result.runs[0].post_count == 1
     finally:
         sink.close()
+
+
+def test_compute_series_relevant_count(tmp_path: Path) -> None:
+    storage = StorageConfig(db_path=tmp_path / "r.db")
+    sink = make_sink(storage, project_dir=tmp_path)
+    try:
+        _make_synced_run(
+            sink, tmp_path, scope="AskReddit", ts="20260507-120000",
+            posts=[_post_row("p1"), _post_row("p2"), _post_row("p3")],
+            decisions=[
+                {"post_id": "p1", "subreddit": "AskReddit", "decision": "include", "reason": "ok"},
+                {"post_id": "p2", "subreddit": "AskReddit", "decision": "exclude", "reason": "off"},
+                {"post_id": "p3", "subreddit": "AskReddit", "decision": "include", "reason": "ok"},
+            ],
+            project_name="demo",
+        )
+        result = compute_series(sink, project_name="demo")
+        assert result.runs[0].relevant_count == 2
+    finally:
+        sink.close()

@@ -56,6 +56,18 @@ def compute_series(
         ).fetchall()
         if limit is not None and limit > 0 and len(rows) > limit:
             rows = rows[-limit:]
+        run_dir_strs = [r[0] for r in rows]
+        relevant_counts: dict[str, int] = {rd: 0 for rd in run_dir_strs}
+        if run_dir_strs:
+            placeholders = ",".join(["?"] * len(run_dir_strs))
+            for rd, cnt in conn.execute(
+                f"SELECT run_dir, COUNT(*) FROM relevance_decisions "
+                f"WHERE decision = 'include' AND run_dir IN ({placeholders}) "
+                f"GROUP BY run_dir",
+                run_dir_strs,
+            ).fetchall():
+                relevant_counts[rd] = int(cnt)
+
         result = SeriesResult(project_name=project_name)
         for run_dir_str, scraped_at_utc, mode, scope, post_count, comment_count in rows:
             run_dir = Path(run_dir_str)
@@ -68,6 +80,7 @@ def compute_series(
                     scope=scope,
                     post_count=int(post_count),
                     comment_count=int(comment_count),
+                    relevant_count=relevant_counts.get(run_dir_str, 0),
                 )
             )
         return result
