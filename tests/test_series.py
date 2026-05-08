@@ -543,3 +543,17 @@ def test_cli_series_format_json_only(tmp_path: Path) -> None:
     out_dir = list((tmp_path / "runs" / "_series" / "proj").iterdir())[0]
     assert (out_dir / "series.json").exists()
     assert not (out_dir / "series.md").exists()
+
+
+def test_cli_series_zero_runs_exits_2(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from reddit_researcher.cli import main as cli_main
+
+    project_dir = _write_project(tmp_path)
+    rc = cli_main([
+        "series", str(project_dir), "--output-root", str(tmp_path / "runs"),
+    ])
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "no runs found" in err.lower()
