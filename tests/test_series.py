@@ -265,3 +265,33 @@ def test_compute_series_limit_keeps_most_recent(tmp_path: Path) -> None:
         ]
     finally:
         sink.close()
+
+
+def test_format_json_round_trip(tmp_path: Path) -> None:
+    from reddit_researcher.series import format_json
+
+    storage = StorageConfig(db_path=tmp_path / "r.db")
+    sink = make_sink(storage, project_dir=tmp_path)
+    try:
+        _make_synced_run(
+            sink, tmp_path, scope="AskReddit", ts="20260506-120000",
+            posts=[_post_row("p1"), _post_row("p2")], project_name="demo",
+        )
+        _make_synced_run(
+            sink, tmp_path, scope="AskReddit", ts="20260507-120000",
+            posts=[_post_row("p2"), _post_row("p3")], project_name="demo",
+        )
+        result = compute_series(sink, project_name="demo")
+        payload = json.loads(format_json(result))
+        for key in (
+            "project_name", "runs", "always_present_post_ids",
+            "title_for", "churn_top", "warnings",
+        ):
+            assert key in payload, f"missing key: {key}"
+        assert payload["project_name"] == "demo"
+        assert payload["always_present_post_ids"] == ["p2"]
+        assert isinstance(payload["runs"][0]["run_dir"], str)
+        # Tuples become lists in JSON.
+        assert payload["churn_top"] and isinstance(payload["churn_top"][0], list)
+    finally:
+        sink.close()

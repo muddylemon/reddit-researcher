@@ -160,3 +160,12 @@ def compute_series(
         return result
     finally:
         conn.close()
+
+
+def format_json(result: SeriesResult) -> str:
+    """Serialize the SeriesResult as a single JSON object.
+
+    `default=str` covers Path values; tuples in `churn_top` become lists,
+    which is the standard JSON round-trip behavior.
+    """
+    return json.dumps(asdict(result), default=str, ensure_ascii=True)
