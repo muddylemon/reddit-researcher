@@ -507,3 +507,39 @@ def test_cli_series_auto_syncs_unsynced_run(
     assert sorted([r["timestamp"] for r in payload["runs"]]) == [
         "20260506-120000", "20260507-120000",
     ]
+
+
+def test_cli_series_format_md_only(tmp_path: Path) -> None:
+    from reddit_researcher.cli import main as cli_main
+
+    project_dir = _write_project(tmp_path)
+    _write_run_jsonl_only(
+        tmp_path, scope="AskReddit", ts="20260507-120000",
+        posts=[_post_row("p1")], project_name="proj",
+    )
+    rc = cli_main([
+        "series", str(project_dir), "--output-root", str(tmp_path / "runs"),
+        "--format", "md",
+    ])
+    assert rc == 0
+    out_dir = list((tmp_path / "runs" / "_series" / "proj").iterdir())[0]
+    assert (out_dir / "series.md").exists()
+    assert not (out_dir / "series.json").exists()
+
+
+def test_cli_series_format_json_only(tmp_path: Path) -> None:
+    from reddit_researcher.cli import main as cli_main
+
+    project_dir = _write_project(tmp_path)
+    _write_run_jsonl_only(
+        tmp_path, scope="AskReddit", ts="20260507-120000",
+        posts=[_post_row("p1")], project_name="proj",
+    )
+    rc = cli_main([
+        "series", str(project_dir), "--output-root", str(tmp_path / "runs"),
+        "--format", "json",
+    ])
+    assert rc == 0
+    out_dir = list((tmp_path / "runs" / "_series" / "proj").iterdir())[0]
+    assert (out_dir / "series.json").exists()
+    assert not (out_dir / "series.md").exists()
