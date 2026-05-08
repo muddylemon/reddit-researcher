@@ -238,3 +238,30 @@ def test_compute_series_warns_on_scope_change(tmp_path: Path) -> None:
         assert any("scope change" in w for w in result.warnings)
     finally:
         sink.close()
+
+
+def test_compute_series_limit_keeps_most_recent(tmp_path: Path) -> None:
+    storage = StorageConfig(db_path=tmp_path / "r.db")
+    sink = make_sink(storage, project_dir=tmp_path)
+    try:
+        for i, ts in enumerate(
+            [
+                "20260501-120000",
+                "20260502-120000",
+                "20260503-120000",
+                "20260504-120000",
+                "20260505-120000",
+            ]
+        ):
+            _make_synced_run(
+                sink, tmp_path, scope="AskReddit", ts=ts,
+                posts=[_post_row(f"p{i}")],
+                project_name="demo",
+            )
+        result = compute_series(sink, project_name="demo", limit=3)
+        assert len(result.runs) == 3
+        assert [r.timestamp for r in result.runs] == [
+            "20260503-120000", "20260504-120000", "20260505-120000",
+        ]
+    finally:
+        sink.close()
