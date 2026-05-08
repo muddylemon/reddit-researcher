@@ -160,6 +160,25 @@ A run's `normalized/*.jsonl` files are canonical. As of 0.2.0, every run is
 - **`diff` consumer:** `reddit-researcher diff <run-a> <run-b>` reads from this
   sink, auto-syncing each run if missing or stale.
 
+## Series rollups
+
+`reddit_researcher/series.py` produces a per-project trend report from the
+sink. Like the `diff` module, it uses only the read-only connection
+(`RunSink.read_only_connect()`) — JSONL on disk remains canonical.
+
+- **Key:** `runs.project_name`. All runs of one project are joined on this
+  column. If the user renames a project mid-series, pre-rename runs no
+  longer match — documented as a known limitation.
+- **Queries:** one ordered fetch from `runs`, one aggregate from
+  `relevance_decisions`, one fetch-per-run from `posts`. Pure Python set
+  arithmetic for new/carried/always-present.
+- **Auto-sync:** the CLI walks the project's `output_root`, finds run
+  dirs whose manifest's `project_name` matches and that are missing or
+  stale in the sink, and syncs them before computing.
+- **Output:** `runs/_series/<project_name>/<timestamp>/series.{md,json}`.
+  `_series/` is collision-free with subreddit-mode and search-mode scope
+  dirs because Reddit subreddit names cannot start with `_`.
+
 ## Corpus formatters
 
 `reddit_researcher/corpus_formatters.py` owns the dispatch between three named

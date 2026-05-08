@@ -4,6 +4,30 @@ All notable changes to Reddit Researcher are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1-beta] — 2026-05-07
+
+Closes the last open item in the `0.2.0` milestone — time-series mode.
+
+### Added
+- **`reddit-researcher series <project>`** — per-project trend rollup
+  across every run of that project. Writes `series.md` and/or `series.json`
+  into `runs/_series/<project_name>/<timestamp>/`. Pure stats (no LLM
+  call): per-run counts and relevance breakdown, posts present in every
+  run, churn for partial-presence posts, and a per-subreddit/per-term
+  count matrix. Auto-syncs missing or stale runs into the sink before
+  computing.
+  - Flags: `--limit N` (most-recent N runs), `--format md|json|both`,
+    `--output-root <path>`.
+
+### Internal
+
+- New `reddit_researcher/series.py` module mirrors the shape of `diff.py`:
+  pure read against the sink, dataclass result, separate text/json formatters.
+- New `tests/test_series.py` covers the compute pipeline (per-run stats,
+  persistence/churn, breakdowns, warnings) plus the CLI handler
+  (auto-sync, format selection, exit codes). DuckDB regression test
+  matches the pattern in `test_diff.py`.
+
 ## [0.2.0-beta] — 2026-05-07
 
 The analytics-and-multi-run line. Closes four of the five 0.2.0 roadmap items;

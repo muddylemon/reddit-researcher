@@ -30,7 +30,7 @@ Goal: make multi-run analysis tractable.
 
 - [x] Optional SQLite/DuckDB sink writing each run's normalized rows into a queryable database. *(0.2.0)*
 - [x] `reddit-researcher diff <run-a> <run-b>` to compare two runs of the same project. *(0.2.0)*
-- [ ] Time-series mode: re-run a project on a schedule and aggregate results across timestamps.
+- [x] Time-series mode: re-run a project on a schedule and aggregate results across timestamps. *(0.2.1)*
 - [x] Configurable corpus formatters (compact, conversational, structured-JSON-for-tools). *(0.2.0)*
 - [x] **Multi-subreddit subreddit-mode** — `[scrape].subreddits = ["a", "b", "c"]` scrapes
       each into one combined run dir. *(0.2.0)*

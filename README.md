@@ -309,6 +309,33 @@ reddit-researcher diff runs/AskReddit/20260507-120000 runs/AskReddit/20260508-12
 For machine-readable output, pass `--format json`. Mismatched modes/scopes
 warn to stderr but the diff still runs.
 
+### Series rollups
+
+`reddit-researcher series <project>` produces a per-project trend report
+across every run of that project, written to a timestamped folder under
+`runs/_series/<project_name>/`.
+
+```bash
+reddit-researcher series projects/missouri-cannabis
+```
+
+Output shape:
+
+```text
+runs/_series/missouri-cannabis/<timestamp>/
+  series.md       # human-readable report
+  series.json     # raw structured data (with --format=json or --format=both)
+```
+
+The report includes one row per run (post/comment counts, relevance
+breakdown, new vs. carried posts), an "always-present" set of post IDs
+that appeared in every run, churn for posts in some-but-not-all runs,
+and a per-subreddit (or per-search-term) count matrix. No LLM call —
+pure stats from the sink.
+
+Use `--limit N` to only include the most recent N runs, or
+`--format json` for machine-readable output.
+
 ### Corpus formats
 
 The text corpus passed to the LLM has three selectable shapes:
