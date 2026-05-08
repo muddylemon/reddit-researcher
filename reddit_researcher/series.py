@@ -227,4 +227,38 @@ def format_markdown(result: SeriesResult) -> str:
     parts.append(_format_text_table(headers, rows))
     parts.append("")
 
+    # Persistence
+    parts.append("## Persistence")
+    parts.append("")
+    if n == 1:
+        parts.append("(only one run; persistence not applicable)")
+    else:
+        always = result.always_present_post_ids
+        parts.append(f"posts present in all {n} runs ({len(always)}):")
+        if not always:
+            parts.append("  (none)")
+        else:
+            shown = always[:_PERSISTENCE_CAP]
+            for pid in shown:
+                title = _truncate(result.title_for.get(pid, ""), _TITLE_TRUNC)
+                parts.append(f"  {pid}  {title}")
+            extra = len(always) - len(shown)
+            if extra > 0:
+                parts.append(f"  ... (+{extra} more)")
+    parts.append("")
+
+    # Churn
+    parts.append("## Churn")
+    parts.append("")
+    if not result.churn_top:
+        parts.append("(none — every post is either always-present or single-run)")
+    else:
+        parts.append(
+            f"posts appearing in some-but-not-all runs (top {len(result.churn_top)} by frequency):"
+        )
+        for pid, count in result.churn_top:
+            title = _truncate(result.title_for.get(pid, ""), _TITLE_TRUNC)
+            parts.append(f"  {pid}  {count}/{n}  {title}")
+    parts.append("")
+
     return "\n".join(parts) + "\n"
