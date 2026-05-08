@@ -52,13 +52,15 @@ Run:
 
 When it finishes:
 
-- Identify the run dir. It's printed in the command output as
-  `Run dir: runs/personalfinance/<ts>`. If you missed it, list the runs folder
-  with `Get-ChildItem runs/personalfinance | Sort-Object LastWriteTime -Descending |
+- Identify the run dir. It's printed in the command output as the last line —
+  either a full absolute path or a relative path ending in
+  `runs/personalfinance/<ts>`. Extract the timestamp segment `<ts>` (format
+  `YYYYMMDD-HHMMSS`). If you missed it, list the runs folder with
+  `Get-ChildItem runs/personalfinance | Sort-Object LastWriteTime -Descending |
   Select-Object -First 1` and use that path. Hold onto `<ts>` for Stages 3 and 5.
-- Read `runs/personalfinance/<ts>/manifest.json` and surface post count, comment
-  count, and any `search_fetch_errors` / `comment_fetch_errors` from it. Use the
-  Read tool.
+- Read `runs/personalfinance/<ts>/manifest.json` and surface `post_count`,
+  `comment_count`, and the `status` field inside `per_subreddit.personalfinance`.
+  Use the Read tool.
 - Read the first non-empty line of `runs/personalfinance/<ts>/normalized/posts.jsonl`
   and print it (truncate to ~200 chars). One sentence: "this is what a normalized
   post looks like — the LLM never sees the raw Reddit JSON."
@@ -68,7 +70,7 @@ When it finishes:
 Run, substituting `<ts>` from Stage 2:
 
 ```powershell
-.venv\Scripts\reddit-researcher.exe extract runs/personalfinance/<ts> --chunk-limit 1 --force-reextract
+.venv\Scripts\reddit-researcher.exe extract runs/personalfinance/<ts> --chunk-limit 1 --force-reextract --prompt-file projects/example-subreddit-faq/prompt.md
 ```
 
 One sentence on what's happening: "chunking the corpus into ~12 000-character
@@ -96,7 +98,7 @@ full extract (Stage 5 pointer 1) will use more of the corpus.
 Print these three pointers (substitute `<ts>` from Stage 2 in pointer 1):
 
 > 1. **Get the full report:** re-run extract without the chunk cap:
->    `.venv\Scripts\reddit-researcher.exe extract runs/personalfinance/<ts> --force-reextract`
+>    `.venv\Scripts\reddit-researcher.exe extract runs/personalfinance/<ts> --force-reextract --prompt-file projects/example-subreddit-faq/prompt.md`
 > 2. **Try other shapes:** `projects/example-game-reception/` (search mode,
 >    comparative), `projects/example-tool-sentiment/` (search mode, dev subs), or
 >    `projects/example-product-research/` (search mode, review-heavy).
