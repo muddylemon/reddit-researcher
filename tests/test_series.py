@@ -164,3 +164,43 @@ def test_compute_series_always_present_and_churn(tmp_path: Path) -> None:
         assert all(post_id != "p1" for post_id, _ in result.churn_top)
     finally:
         sink.close()
+
+
+def test_compute_series_per_subreddit_breakdown(tmp_path: Path) -> None:
+    storage = StorageConfig(db_path=tmp_path / "r.db")
+    sink = make_sink(storage, project_dir=tmp_path)
+    try:
+        _make_synced_run(
+            sink, tmp_path, scope="multi", ts="20260507-120000",
+            posts=[
+                _post_row("p1", subreddit="trees"),
+                _post_row("p2", subreddit="trees"),
+                _post_row("p3", subreddit="MOCannabis"),
+            ],
+            project_name="demo",
+        )
+        result = compute_series(sink, project_name="demo")
+        assert result.runs[0].per_subreddit == {"trees": 2, "MOCannabis": 1}
+        # search-term map is empty for subreddit-mode rows.
+        assert result.runs[0].per_search_term == {}
+    finally:
+        sink.close()
+
+
+def test_compute_series_per_search_term_breakdown(tmp_path: Path) -> None:
+    storage = StorageConfig(db_path=tmp_path / "r.db")
+    sink = make_sink(storage, project_dir=tmp_path)
+    try:
+        _make_synced_run(
+            sink, tmp_path, scope="search", ts="20260507-120000", mode="search",
+            posts=[
+                _post_row("p1", search_term="silksong"),
+                _post_row("p2", search_term="silksong"),
+                _post_row("p3", search_term="gta vi"),
+            ],
+            project_name="demo",
+        )
+        result = compute_series(sink, project_name="demo")
+        assert result.runs[0].per_search_term == {"silksong": 2, "gta vi": 1}
+    finally:
+        sink.close()

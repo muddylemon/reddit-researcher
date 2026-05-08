@@ -70,17 +70,32 @@ def compute_series(
 
         per_run_post_ids: dict[str, set[str]] = {}
         per_run_titles: dict[str, dict[str, str]] = {}
+        per_run_sub_counts: dict[str, dict[str, int]] = {}
+        per_run_term_counts: dict[str, dict[str, int]] = {}
         for rd in run_dir_strs:
             id_set: set[str] = set()
             title_map: dict[str, str] = {}
-            for post_id, title in conn.execute(
-                "SELECT DISTINCT post_id, title FROM posts WHERE run_dir = ?",
+            sub_counts: dict[str, int] = {}
+            term_counts: dict[str, int] = {}
+            seen_pid: set[str] = set()  # avoid double-counting a post that appears
+                                        # under multiple search_term rows in the sink.
+            for post_id, title, subreddit, search_term in conn.execute(
+                "SELECT post_id, title, subreddit, search_term FROM posts WHERE run_dir = ?",
                 (rd,),
             ).fetchall():
                 id_set.add(post_id)
                 title_map[post_id] = title
+                if post_id in seen_pid:
+                    continue
+                seen_pid.add(post_id)
+                if subreddit:
+                    sub_counts[subreddit] = sub_counts.get(subreddit, 0) + 1
+                if search_term:
+                    term_counts[search_term] = term_counts.get(search_term, 0) + 1
             per_run_post_ids[rd] = id_set
             per_run_titles[rd] = title_map
+            per_run_sub_counts[rd] = sub_counts
+            per_run_term_counts[rd] = term_counts
 
         result = SeriesResult(project_name=project_name)
         previous_ids: set[str] = set()
@@ -107,6 +122,8 @@ def compute_series(
                     relevant_count=relevant_counts.get(run_dir_str, 0),
                     new_post_ids=new_ids,
                     carried_post_ids=carried_ids,
+                    per_subreddit=per_run_sub_counts.get(run_dir_str, {}),
+                    per_search_term=per_run_term_counts.get(run_dir_str, {}),
                 )
             )
             previous_ids = current_ids
