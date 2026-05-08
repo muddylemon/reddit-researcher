@@ -100,3 +100,38 @@ def test_compute_series_relevant_count(tmp_path: Path) -> None:
         assert result.runs[0].relevant_count == 2
     finally:
         sink.close()
+
+
+def test_compute_series_new_and_carried_post_ids(tmp_path: Path) -> None:
+    storage = StorageConfig(db_path=tmp_path / "r.db")
+    sink = make_sink(storage, project_dir=tmp_path)
+    try:
+        _make_synced_run(
+            sink, tmp_path, scope="AskReddit", ts="20260505-120000",
+            posts=[_post_row("p1"), _post_row("p2"), _post_row("p3")],
+            project_name="demo",
+        )
+        _make_synced_run(
+            sink, tmp_path, scope="AskReddit", ts="20260506-120000",
+            posts=[_post_row("p2"), _post_row("p3"), _post_row("p4")],
+            project_name="demo",
+        )
+        _make_synced_run(
+            sink, tmp_path, scope="AskReddit", ts="20260507-120000",
+            posts=[_post_row("p3"), _post_row("p4"), _post_row("p5")],
+            project_name="demo",
+        )
+        result = compute_series(sink, project_name="demo")
+        # Run 0 (first): new == all posts, carried == [].
+        assert sorted(result.runs[0].new_post_ids) == ["p1", "p2", "p3"]
+        assert result.runs[0].carried_post_ids == []
+        # Run 1: new is what wasn't in run 0; carried is the intersection.
+        assert sorted(result.runs[1].new_post_ids) == ["p4"]
+        assert sorted(result.runs[1].carried_post_ids) == ["p2", "p3"]
+        # Run 2: comparison is to the previous run only.
+        assert sorted(result.runs[2].new_post_ids) == ["p5"]
+        assert sorted(result.runs[2].carried_post_ids) == ["p3", "p4"]
+        # title_for is populated for every post seen.
+        assert result.title_for["p5"] == "Title p5"
+    finally:
+        sink.close()

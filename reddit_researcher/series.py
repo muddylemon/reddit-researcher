@@ -68,9 +68,33 @@ def compute_series(
             ).fetchall():
                 relevant_counts[rd] = int(cnt)
 
+        per_run_post_ids: dict[str, set[str]] = {}
+        per_run_titles: dict[str, dict[str, str]] = {}
+        for rd in run_dir_strs:
+            id_set: set[str] = set()
+            title_map: dict[str, str] = {}
+            for post_id, title in conn.execute(
+                "SELECT DISTINCT post_id, title FROM posts WHERE run_dir = ?",
+                (rd,),
+            ).fetchall():
+                id_set.add(post_id)
+                title_map[post_id] = title
+            per_run_post_ids[rd] = id_set
+            per_run_titles[rd] = title_map
+
         result = SeriesResult(project_name=project_name)
+        previous_ids: set[str] = set()
+        title_for: dict[str, str] = {}
         for run_dir_str, scraped_at_utc, mode, scope, post_count, comment_count in rows:
             run_dir = Path(run_dir_str)
+            current_ids = per_run_post_ids.get(run_dir_str, set())
+            if not result.runs:
+                new_ids = sorted(current_ids)
+                carried_ids: list[str] = []
+            else:
+                new_ids = sorted(current_ids - previous_ids)
+                carried_ids = sorted(current_ids & previous_ids)
+            title_for.update(per_run_titles.get(run_dir_str, {}))
             result.runs.append(
                 RunRow(
                     run_dir=run_dir,
@@ -81,8 +105,12 @@ def compute_series(
                     post_count=int(post_count),
                     comment_count=int(comment_count),
                     relevant_count=relevant_counts.get(run_dir_str, 0),
+                    new_post_ids=new_ids,
+                    carried_post_ids=carried_ids,
                 )
             )
+            previous_ids = current_ids
+        result.title_for = title_for
         return result
     finally:
         conn.close()
