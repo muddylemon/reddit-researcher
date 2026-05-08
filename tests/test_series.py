@@ -422,3 +422,15 @@ def test_format_markdown_warnings_section(tmp_path: Path) -> None:
         assert "scope change" in md
     finally:
         sink.close()
+
+
+def test_cli_series_help_does_not_crash(capsys: pytest.CaptureFixture[str]) -> None:
+    from reddit_researcher.cli import main as cli_main
+
+    rc = cli_main(["series", "--help"])
+    # argparse `--help` exits with 0.
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "series" in out.lower()
+    assert "--limit" in out
+    assert "--format" in out

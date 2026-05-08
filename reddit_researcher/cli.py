@@ -213,6 +213,27 @@ def build_parser() -> argparse.ArgumentParser:
         help="Output format (default text).",
     )
 
+    series_parser = subparsers.add_parser(
+        "series",
+        help="Generate a per-project trend rollup across runs.",
+    )
+    series_parser.add_argument(
+        "project",
+        help="Path to project.toml or its directory.",
+    )
+    series_parser.add_argument(
+        "--output-root", default=None,
+        help="Override where _series/ lives. Defaults to the project's output_root or ./runs.",
+    )
+    series_parser.add_argument(
+        "--limit", type=int, default=None,
+        help="Only include the most recent N runs.",
+    )
+    series_parser.add_argument(
+        "--format", default="md", choices=["md", "json", "both"],
+        help="Output format(s). 'both' writes series.md and series.json.",
+    )
+
     return parser
 
 
@@ -286,7 +307,10 @@ def _resolve_output_root(project: ProjectConfig, override: str | None) -> Path:
 
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
-    args = parser.parse_args(argv)
+    try:
+        args = parser.parse_args(argv)
+    except SystemExit as exc:
+        return int(exc.code) if exc.code is not None else 0
 
     # Load .env files into os.environ as early as possible so config defaults
     # (which read OLLAMA_URL etc.) see them. The project's own .env, if any,
@@ -401,6 +425,9 @@ def _dispatch(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
 
     if args.command == "diff":
         return _dispatch_diff(args, parser)
+
+    if args.command == "series":
+        return _dispatch_series(args, parser)
 
     parser.error(f"Unsupported command: {args.command}")
     return 2
